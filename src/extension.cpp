@@ -76,12 +76,6 @@ using RegisterCallbackTraceFn = void (*)(const char *name, size_t count, const c
 RegisterCallbackTraceFn original_RegisterCallbackTrace = nullptr;
 
 void hooked_RegisterCallbackTrace(const char *name, size_t count, const char *profile, const char *callerStack) {
-    ACC_CORE_INFO("[CALLBACK TRACE] name='{}' | count={} | profile='{}' | callerStack(top)='{}'",
-               name ? name : "<null>",
-               count,
-               profile ? profile : "<null>",
-               callerStack ? std::string_view(callerStack).substr(0, 80) : "<no stack>");
-
     std::lock_guard lock(g_CallbackTraceMutex);
 
     g_CallbackTraceBuffer.push_back({
@@ -159,17 +153,16 @@ static bool dumpCallback(const google_breakpad::MinidumpDescriptor& descriptor, 
 		dumpFile << "-------- CONSOLE HISTORY END --------\n\n";
 	}
 
-	dumpFile << "-------- CALLBACK TRACE BEGIN --------\n";
+	dumpFile << "-------- CALLBACK TRACE BEGIN -> NEWEST CALLBACK IS FIRST --------\n";
 
 	{
 		std::lock_guard lock(g_CallbackTraceMutex);
-		for (const auto& entry : g_CallbackTraceBuffer)
-		{
-			dumpFile << "Name: " << entry.name << "\n";
-			dumpFile << "Count: " << entry.count << "\n";
-			dumpFile << "Profile: " << entry.profile << "\n";
-			dumpFile << "CallerStack:\n" << entry.callerStack << "\n";
-			dumpFile << "------------------------\n";
+		for (auto it = g_CallbackTraceBuffer.rbegin(); it != g_CallbackTraceBuffer.rend(); ++it) {
+		    dumpFile << "Name: " << it->name << "\n";
+		    dumpFile << "Count: " << it->count << "\n";
+		    dumpFile << "Profile: " << it->profile << "\n";
+		    dumpFile << "CallerStack:\n" << it->callerStack << "\n";
+		    dumpFile << "------------------------\n";
 		}
 	}
 
