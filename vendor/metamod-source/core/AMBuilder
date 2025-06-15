@@ -1,0 +1,47 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python: 
+import os
+
+for sdk_target in MMS.sdk_targets:
+  sdk = sdk_target.sdk
+  cxx = sdk_target.cxx
+  
+  name = 'metamod.' + sdk['extension']
+  binary = MMS.HL2Library(builder, cxx, name, sdk)
+
+  binary.sources += [
+    'metamod.cpp',
+    'metamod_console.cpp',
+    'metamod_oslink.cpp',
+    'metamod_plugins.cpp',
+    'metamod_util.cpp',
+    'provider/provider_base.cpp',
+    'sourcehook/sourcehook.cpp',
+    'sourcehook/sourcehook_impl_chookidman.cpp',
+    'sourcehook/sourcehook_impl_chookmaninfo.cpp',
+    'sourcehook/sourcehook_impl_cproto.cpp',
+    'sourcehook/sourcehook_impl_cvfnptr.cpp',
+    'sourcehook/sourcehook_hookmangen.cpp',
+    'gamedll_bridge.cpp'
+  ]
+
+  if sdk.get('source2', False):
+    binary.sources += [
+      'provider/source2/provider_source2.cpp',
+    ]
+    binary.custom = [builder.tools.Protoc(protoc = sdk_target.protoc, sources = [
+      os.path.join(sdk['path'], 'common', 'network_connection.proto'),
+    ])]
+  else:
+    binary.sources += [
+      'provider/source/provider_source.cpp',
+      'provider/source/provider_source_console.cpp',
+      'vsp_bridge.cpp'
+      ]
+    binary.compiler.defines += ['_ALLOW_KEYWORD_MACROS']
+
+  if cxx.target.arch == 'x86':
+    binary.sources += ['sourcehook/sourcehook_hookmangen_x86.cpp']
+  elif binary.compiler.target.arch == 'x86_64' and binary.compiler.target.platform != 'linux':
+    binary.sources += ['sourcehook/sourcehook_hookmangen_x86_64.cpp']
+  nodes = builder.Add(binary)
+  MMS.binaries += [nodes]

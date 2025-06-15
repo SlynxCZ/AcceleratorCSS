@@ -1,0 +1,19 @@
+﻿version: "3.9"
+
+services:
+  builder:
+    build:
+      context: ./docker
+    volumes:
+      - ./:/project
+    working_dir: /project
+    environment:
+      HL2SDKCS2: /project/vendor/hl2sdk-cs2
+      MMSOURCE112: /project/vendor/metamod-source
+    command: >
+      bash -c "
+        premake5 gmake2 &&
+        cd build &&
+        bear -- make -j$(nproc) &&
+        cp compile_commands.json /project/compile_commands.json
+      "
