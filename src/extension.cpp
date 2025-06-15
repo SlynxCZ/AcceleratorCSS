@@ -32,8 +32,6 @@
 #include "common/linux/http_upload.h"
 #endif
 
-#include "vendor/nlohmann/json.hpp"
-
 #include "common/path_helper.h"
 #include "common/using_std_string.h"
 #include "google_breakpad/processor/basic_source_line_resolver.h"

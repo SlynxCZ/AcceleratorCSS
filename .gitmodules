@@ -23,3 +23,6 @@
 [submodule "vendor/premake-cmake"]
 	path = vendor/premake-cmake
 	url = https://github.com/Enhex/premake-cmake
+[submodule "vendor/Protobufs"]
+	path = vendor/Protobufs
+	url = https://github.com/SteamDatabase/Protobufs

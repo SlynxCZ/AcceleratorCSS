@@ -1,0 +1,5 @@
+"Metamod Plugin"
+{
+	"alias"	"AcceleratorCSS"
+	"file"	"addons/AcceleratorCSS/bin/${ACCELERATORCSS_VDF_PLATFORM}/AcceleratorCSS"
+}
