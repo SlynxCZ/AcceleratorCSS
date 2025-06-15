@@ -1,3 +1,17 @@
+print("==== Premake startup ====")
+print("Current working directory: " .. os.getcwd())
+
+-- 👇 TADY PŘIDEJ OBA VENDOR PATHY
+package.path = package.path .. ";vendor/premake-clion/?.lua;vendor/premake-cmake/?.lua"
+
+print("Lua package.path:\n" .. package.path)
+
+-- 👇 TADY UŽ TO BUDE FUNGOVAT
+local clion = require("clion")
+
+
+print("Requiring cmake.lua (will be triggered inside clion.lua)...")
+
 include("premake/utils")
 
 SDK_PATH = os.getenv("HL2SDKCS2")
@@ -115,3 +129,6 @@ project "AcceleratorCSS"
 		path.join("vendor", "breakpad", "src"),
 		path.join("vendor", "fmt", "include"),
 	}
+
+clion.workspace()
+clion.project()
