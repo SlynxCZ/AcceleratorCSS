@@ -8,7 +8,7 @@ generated/
 # configure_file auto generated.
 configs/addons/metamod/counterstrikesharp.vdf
 
-libraries/mono/
+vendor/mono/
 
 CMakeSettings.json
 
