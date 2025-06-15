@@ -37,7 +37,6 @@ set(SOURCE_FILES
         src/CMiniDumpComment.hpp
         src/log.cpp
         src/log.h
-        src/network_connection.pb.h
 )
 
 add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES} ${NATIVES_SOURCES} ${CONVERSIONS_SOURCES} ${CONVERSIONS_HEADERS})

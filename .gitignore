@@ -8,6 +8,8 @@ generated/
 # configure_file auto generated.
 configs/addons/metamod/counterstrikesharp.vdf
 
+!vendor/breakpad/src/third_party/lss/linux_syscall_support.h
+
 vendor/mono/
 
 CMakeSettings.json

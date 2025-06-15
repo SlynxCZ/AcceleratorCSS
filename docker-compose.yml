@@ -14,6 +14,5 @@ services:
       bash -c "
         premake5 gmake2 &&
         cd build &&
-        bear -- make -j$(nproc) &&
-        cp compile_commands.json /project/compile_commands.json
+        make -j$(nproc)
       "
