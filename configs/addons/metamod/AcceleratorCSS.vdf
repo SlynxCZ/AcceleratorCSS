@@ -1,0 +1,5 @@
+"Metamod Plugin"
+{
+	"alias"	"AcceleratorCSS"
+	"file"	"addons/AcceleratorCSS/bin/linuxsteamrt64/AcceleratorCSS"
+}
