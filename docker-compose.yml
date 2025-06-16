@@ -20,5 +20,6 @@ services:
         cd build &&
         make -j$(nproc) &&
         cd ../ &&
-        premake5 clion
+        premake5 clion &&
+        cp configs/addons/metamod/AcceleratorCSS.vdf bin/Debug/
       "
