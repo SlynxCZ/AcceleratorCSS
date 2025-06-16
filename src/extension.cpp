@@ -47,7 +47,7 @@
 #include "processor/stackwalk_common.h"
 #include "processor/pathname_stripper.h"
 
-constexpr size_t kMaxCallbackTrace = 20;
+constexpr size_t kMaxCallbackTrace = 5;
 
 struct CallbackTraceEntry {
     std::string name;
