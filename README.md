@@ -22,7 +22,7 @@
 
 * **Hooked `RegisterCallbackTrace`** to log all executed C# callbacks
 * **Breakpad integration** for safe `.dmp` and `.txt` log generation
-* **Thread-safe ring buffer** for last 20 callback invocations
+* **Thread-safe ring buffer** for last 5 callback invocations
 * **Hook auto-restoration** of crash signal handlers
 * **Support for late plugin loading**
 * **C# plugin is no longer required**
