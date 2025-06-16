@@ -1,3 +1,4 @@
+require "clion"
 include("premake/utils")
 
 SDK_PATH = os.getenv("HL2SDKCS2")
@@ -13,7 +14,7 @@ if(MM_PATH == nil) then
 end
 
 workspace "AcceleratorCSS"
-	configurations { "Debug", "Release" }
+	configurations { "Debug", "Release", "RelWithDebInfo" }
 	platforms {
 		"win64",
 		"linux64"
@@ -53,6 +54,13 @@ project "AcceleratorCSS"
 		libdirs {
       path.join("vendor", "funchook", "lib", "Release"),
     }
+
+	filter "configurations:RelWithDebInfo"
+		defines { "NDEBUG" }
+		optimize "On"
+		libdirs {
+	  path.join("vendor", "funchook", "lib", "Release"),
+	}
 
 	filter "system:windows"
 		cppdialect "c++20"

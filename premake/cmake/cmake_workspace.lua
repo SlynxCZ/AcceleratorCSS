@@ -43,21 +43,18 @@ function m.generate(wks)
 	cmake.workspace.multiplePlatforms = #platforms > 1
 
 	local cfgs = {}
-	local cfg_default = nil
+	local cfg_default = "RelWithDebInfo"
 	-- We can not join this loop with the earlier one since `cfgname()` depends on `multiplePlatforms`.
 	for cfg in workspace.eachconfig(wks) do
 		local name = cmake.cfgname(cfg)
 		table.insert(cfgs, name)
-		if name == "Debug" then
-			cfg_default = name
-		end
 	end
 	if not cfg_default then
 		cfg_default = cfgs[1]
 	end
 
 	-- Enforce available configurations
-	p.w('set(PREMAKE_BUILD_TYPES "%s")', table.concat(cfgs, '" "'))
+	p.w('set(PREMAKE_BUILD_TYPES "%s")', "RelWithDebInfo")
 	p.w('get_property(multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)')
 	p.push('if(multi_config)')
 	p.w('set(CMAKE_CONFIGURATION_TYPES "${PREMAKE_BUILD_TYPES}" CACHE STRING "list of supported configuration types" FORCE)')

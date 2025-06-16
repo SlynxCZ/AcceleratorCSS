@@ -37,12 +37,7 @@ function cmake.generateProject(prj)
 end
 
 function cmake.cfgname(cfg)
-    local cfgname = cfg.buildcfg
-    if cmake.workspace.multiplePlatforms then
-        -- CMake breaks if "|" is used here
-        cfgname = string.format("%s-%s", cfg.platform, cfg.buildcfg)
-    end
-    return cfgname
+    return cfg.buildcfg
 end
 
 function cmake.cleanWorkspace(wks)
