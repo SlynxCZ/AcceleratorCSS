@@ -1,4 +1,8 @@
-﻿#pragma once
+//
+// Created by Michal Přikryl on 12.06.2025.
+// Copyright (c) 2025 slynxcz. All rights reserved.
+//
+#pragma once
 class CMiniDumpComment
 {
 public:
