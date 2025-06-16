@@ -79,16 +79,15 @@ This plugin will hook the `RegisterCallbackTrace` symbol in `counterstrikesharp.
 
 ---
 
-## Example Logged Trace
+## Example Logged Trace (this is how i found out why my server crashes after 4 months lol)
 
 ```text
 -------- CALLBACK TRACE BEGIN -> NEWEST CALLBACK IS FIRST --------
-Name: CorePlugin+<>c__DisplayClass127_1.<LoadServerInfo>b__1
+Name: CounterStrikeSharp.API.Core.BasePlugin+<>c__DisplayClass51_0`1[[CounterStrikeSharp.API.Core.Listeners+OnTick, CounterStrikeSharp.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]].<RegisterListener>b__2
 Count: 1
-Profile: ScriptCallback::Execute::<LoadServerInfo>b__1
+Profile: ScriptCallback::Execute::<RegisterListener>b__2
 CallerStack:
-   at System.Environment.get_StackTrace()
-   at CounterStrikeSharp.API.Core.Func
+JailBreak.JailBreak+<>c__DisplayClass114_1.<EventPlayerDeath>b__3 @ :0
 ...
 -------- CALLBACK TRACE END --------
 ```
