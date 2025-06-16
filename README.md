@@ -1,67 +1,102 @@
 # AcceleratorCSS
 
-**AcceleratorCSS** is a native crash handler integration for **CounterStrikeSharp** plugins. It catches unhandled exceptions in C# plugins and logs detailed stack traces using a native `.so` Metamod plugin.
+**Local crash handler for CounterStrikeSharp with callback trace logging.**
 
 ---
 
-## 📦 Installation
+## Overview
 
-If you're using a **precompiled release** (e.g., downloaded a ZIP from GitHub Releases):
+`AcceleratorCSS` is a Metamod plugin for CS2 servers. It provides:
 
-1. Extract the contents of the ZIP into your server's `csgo/addons/` directory:
-
-```
-csgo/
- ├── addons/
- │   ├── AcceleratorCSS/
- │   │   └── bin/linuxsteamrt64/AcceleratorCSS.so
-```
-
-2. Done — the plugin will auto-load on next server start.
+* Local crash dump creation using Breakpad
+* Custom crash log file generation
+* Full callback trace logging before crash (tracked by `RegisterCallbackTrace`)
+* Runtime hook on CounterStrikeSharp to intercept callback calls
+* Auto-repair of signal handler detour (in `GameFrame()`)
+* Works independently — **no C# plugin is required**
 
 ---
 
-If you're building it yourself:
+## Features
 
-1. Clone the repository:
+* **Hooked `RegisterCallbackTrace`** to log all executed C# callbacks
+* **Breakpad integration** for safe `.dmp` and `.txt` log generation
+* **Thread-safe ring buffer** for last 20 callback invocations
+* **Hook auto-restoration** of crash signal handlers
+* **Support for late plugin loading**
+* **C# plugin is no longer required**
+
+---
+
+## File Output
+
+Crash logs are written to:
+
+```
+/addons/AcceleratorCSS/logs/
+```
+
+With files:
+
+```
+crash_dump.dmp.txt (callbacks should in .txt, no .dmp!)
+```
+
+Text logs contain:
+
+* Map, game path, command line
+* Console output buffer
+* Trace of recent callbacks (name, count, stack)
+* **Accurate stacktrace metadata for each C# callback**
+
+---
+
+## Building
+
+### Dependencies:
+
+* [funchook](https://github.com/kubo/funchook)
+* [Google Breakpad](https://chromium.googlesource.com/breakpad/breakpad/)
+* [spdlog](https://github.com/gabime/spdlog)
+* HL2SDK-CS2 headers
+* Metamod\:Source (CS2 version)
+
+### CMake (example):
 
 ```bash
-https://github.com/SlynxCZ/AcceleratorCSS
-```
-
-2. Build the native Metamod plugin (`AcceleratorCSS.so`) and place it into:
-
-```
-csgo/addons/AcceleratorCSS/bin/linuxsteamrt64/AcceleratorCSS.so
-```
-
-3. Build the CounterStrikeSharp C# plugin (`AcceleratorCSS_CSS.dll`) and place it into:
-
-```
-csgo/addons/counterstrikesharp/plugins/AcceleratorCSS_CSS/
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
+make -j
 ```
 
 ---
 
-## 🧠 How It Works
+## Integration with CounterStrikeSharp
 
-* On server startup, the C# plugin resolves and loads the `.so` using `DllImport`
-* When any `UnhandledException` occurs in any plugin (e.g., missing null check, async task crash), it's caught via `AppDomain.CurrentDomain.UnhandledException`
-* The C# plugin sends the stacktrace to the `.so`
-* The `.so` logs the crash with colored output using `spdlog` and can write it to a file
+This plugin will hook the `RegisterCallbackTrace` symbol in `counterstrikesharp.so` automatically — **no C# plugin required.
 
 ---
 
-## ✅ Features
+## Example Logged Trace
 
-* 🔄 Auto-loads native `.so` from proper relative path
-* ⚠️ Catches unhandled exceptions across all CS# plugins
-* 🧠 Logs the full exception stacktrace natively
-* 📁 Uses `spdlog` for advanced formatting and color output
-* 🧩 Compatible with any CounterStrikeSharp server on Linux
+```text
+-------- CALLBACK TRACE BEGIN -> NEWEST CALLBACK IS FIRST --------
+Name: CorePlugin+<>c__DisplayClass127_1.<LoadServerInfo>b__1
+Count: 1
+Profile: ScriptCallback::Execute::<LoadServerInfo>b__1
+CallerStack:
+   at System.Environment.get_StackTrace()
+   at CounterStrikeSharp.API.Core.Func
+...
+-------- CALLBACK TRACE END --------
+```
 
 ---
 
-## 📝 License
+## License
 
-GPLv3 License © 2025 [slynxcz](https://github.com/slynxcz)
+[GPLv3](https://www.gnu.org/licenses/gpl-3.0.en.html)
+
+## Author
+
+**Slynx / [funplay.pro](https://funplay.pro/)**
