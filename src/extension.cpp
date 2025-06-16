@@ -1,4 +1,8 @@
-﻿#include "extension.h"
+//
+// Created by Michal Přikryl on 12.06.2025.
+// Copyright (c) 2025 slynxcz. All rights reserved.
+//
+#include "extension.h"
 #include "CMiniDumpComment.hpp"
 #include "log.h"
 
