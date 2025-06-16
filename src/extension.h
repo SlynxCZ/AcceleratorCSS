@@ -1,3 +1,7 @@
+//
+// Created by Michal Přikryl on 12.06.2025.
+// Copyright (c) 2025 slynxcz. All rights reserved.
+//
 #pragma once
 
 #ifndef _INCLUDE_METAMOD_SOURCE_STUB_PLUGIN_H_
