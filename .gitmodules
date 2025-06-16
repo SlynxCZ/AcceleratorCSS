@@ -11,12 +11,6 @@
 [submodule "vendor/spdlog"]
 	path = vendor/spdlog
 	url = https://github.com/gabime/spdlog
-[submodule "vendor/premake-clion"]
-	path = vendor/premake-clion
-	url = https://github.com/Enhex/premake-clion
-[submodule "vendor/premake-cmake"]
-	path = vendor/premake-cmake
-	url = https://github.com/Enhex/premake-cmake
 [submodule "vendor/Protobufs"]
 	path = vendor/Protobufs
 	url = https://github.com/SteamDatabase/Protobufs
