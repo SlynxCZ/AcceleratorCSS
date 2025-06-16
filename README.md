@@ -14,6 +14,7 @@
 * Runtime hook on CounterStrikeSharp to intercept callback calls
 * Auto-repair of signal handler detour (in `GameFrame()`)
 * Works independently — **no C# plugin is required**
+* Currently **Linux-only**, but **Windows support is planned**
 
 ---
 
@@ -74,7 +75,7 @@ docker compose up --build
 
 ## Integration with CounterStrikeSharp
 
-This plugin will hook the `RegisterCallbackTrace` symbol in `counterstrikesharp.so` automatically — **no C# plugin required.
+This plugin will hook the `RegisterCallbackTrace` symbol in `counterstrikesharp.so` automatically — **no C# plugin required**.
 
 ---
 
