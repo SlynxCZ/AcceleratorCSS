@@ -61,12 +61,13 @@ Text logs contain:
 * HL2SDK-CS2 headers
 * Metamod\:Source (CS2 version)
 
-### CMake (example):
+### Docker + Premake:
 
 ```bash
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
-make -j
+git clone https://github.com/SlynxCZ/AcceleratorCSS.git
+cd AcceleratorCSS
+git submodule update --init --recursive
+docker compose up --build
 ```
 
 ---
