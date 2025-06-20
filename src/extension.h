@@ -11,39 +11,44 @@
 #include <igameevents.h>
 #include <sh_vector.h>
 #include <iserver.h>
+#include <json.hpp>
+
+using json = nlohmann::json;
 
 namespace acceleratorcss {
-	class AcceleratorCSS_MM : public ISmmPlugin, public IMetamodListener {
-	public:
-		bool Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool late);
+    class AcceleratorCSS_MM : public ISmmPlugin, public IMetamodListener {
+    public:
+        bool Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool late);
 
-		bool Unload(char *error, size_t maxlen);
+        bool Unload(char *error, size_t maxlen);
 
-		void AllPluginsLoaded();
+        void AllPluginsLoaded();
 
-		const char *GetAuthor();
+        const char *GetAuthor();
 
-		const char *GetName();
+        const char *GetName();
 
-		const char *GetDescription();
+        const char *GetDescription();
 
-		const char *GetURL();
+        const char *GetURL();
 
-		const char *GetLicense();
+        const char *GetLicense();
 
-		const char *GetVersion();
+        const char *GetVersion();
 
-		const char *GetDate();
+        const char *GetDate();
 
-		const char *GetLogTag();
+        const char *GetLogTag();
 
-	private:
-		void GameFrame(bool simulating, bool bFirstTick, bool bLastTick);
+    private:
+        void GameFrame(bool simulating, bool bFirstTick, bool bLastTick);
 
-		void StartupServer(const GameSessionConfiguration_t &config, ISource2WorldSession *, const char *);
-	};
+        void StartupServer(const GameSessionConfiguration_t &config, ISource2WorldSession *, const char *);
+    };
 
-	extern AcceleratorCSS_MM gPlugin;
+    inline json g_Config;
+
+    extern AcceleratorCSS_MM gPlugin;
 
 #endif //_INCLUDE_METAMOD_SOURCE_STUB_PLUGIN_H_
 }

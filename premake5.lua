@@ -118,8 +118,9 @@ project "AcceleratorCSS"
 	pic "On"
 
 	includedirs {
-    path.join("vendor", "spdlog", "include"),
-    path.join("vendor", "funchook", "include"),
+		path.join("vendor", "nlohmann"),
+    	path.join("vendor", "spdlog", "include"),
+    	path.join("vendor", "funchook", "include"),
 		path.join("vendor", "breakpad", "src"),
 		path.join("vendor", "fmt", "include"),
 	}

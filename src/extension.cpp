@@ -36,6 +36,7 @@
 #include "common/linux/http_upload.h"
 #endif
 
+#include "paths.h"
 #include "common/path_helper.h"
 #include "common/using_std_string.h"
 #include "google_breakpad/processor/basic_source_line_resolver.h"
@@ -51,7 +52,6 @@ constexpr size_t kMaxCallbackTrace = 5;
 
 struct CallbackTraceEntry {
     std::string name;
-    size_t count;
     std::string profile;
     std::string callerStack;
 };
@@ -66,125 +66,145 @@ char crashGamePath[512];
 char crashCommandLine[1024];
 char dumpStoragePath[512];
 
-google_breakpad::ExceptionHandler* exceptionHandler = nullptr;
+google_breakpad::ExceptionHandler *exceptionHandler = nullptr;
 CMiniDumpComment g_MiniDumpComment(95000);
 
-void (*SignalHandler)(int, siginfo_t*, void*);
+void (*SignalHandler)(int, siginfo_t *, void *);
+
 const int kExceptionSignals[] = {SIGSEGV, SIGABRT, SIGFPE, SIGILL, SIGBUS};
 const int kNumHandledSignals = std::size(kExceptionSignals);
 
 bool g_pluginRegistered = false;
 funchook_t *g_funchook = nullptr;
 
-using RegisterCallbackTraceFn = void (*)(const char *name, size_t count, const char *profile, const char *callerStack);
+using RegisterCallbackTraceFn = void (*)(const char *name, const char *profile, const char *callerStack);
 RegisterCallbackTraceFn original_RegisterCallbackTrace = nullptr;
 
-void hooked_RegisterCallbackTrace(const char *name, size_t count, const char *profile, const char *callerStack) {
-    std::lock_guard lock(g_CallbackTraceMutex);
+void hooked_RegisterCallbackTrace(const char *name, const char *profile, const char *callerStack) {
+    const std::string sName = name ? name : "";
+    const std::string sProfile = profile ? profile : "";
+    const std::string sCaller = callerStack ? callerStack : "";
 
-    g_CallbackTraceBuffer.push_back({
-        name ? name : "<null>",
-        count,
-        profile ? profile : "<null>",
-        callerStack ? callerStack : "<no stack>"
-    });
+    try {
+        if (acceleratorcss::g_Config.contains("ProfileExcludeFilters")) {
+            const auto &filters = acceleratorcss::g_Config["ProfileExcludeFilters"];
+            bool matched = false;
+            for (const auto &f: filters) {
+                if (sProfile.find(f.get<std::string>()) != std::string::npos) {
+                    matched = true;
+                    break;
+                }
+            }
 
-    if (g_CallbackTraceBuffer.size() > kMaxCallbackTrace)
-        g_CallbackTraceBuffer.pop_front();
+            if (matched)
+                return;
+        }
+    } catch (...) {
+        ACC_CORE_WARN("- [ Profile exclude filter failed. ] -");
+    } {
+        std::lock_guard lock(g_CallbackTraceMutex);
+        g_CallbackTraceBuffer.push_back({sName, sProfile, sCaller});
+        if (g_CallbackTraceBuffer.size() > kMaxCallbackTrace)
+            g_CallbackTraceBuffer.pop_front();
+    }
+
+    ACC_CORE_INFO("-------------------------------");
+    ACC_CORE_INFO("↪ Callback Trace");
+    ACC_CORE_INFO("Name        : {}", sName);
+    ACC_CORE_INFO("Profile     : {}", sProfile);
+    ACC_CORE_INFO("CallerStack : {}", sCaller);
+    ACC_CORE_INFO("-------------------------------");
 
     if (original_RegisterCallbackTrace)
-        original_RegisterCallbackTrace(name, count, profile, callerStack);
+        original_RegisterCallbackTrace(name, profile, callerStack);
 }
 
 void HookRegisterCallbackTrace() {
     void *handle = dlopen("counterstrikesharp.so", RTLD_NOW | RTLD_NOLOAD);
     if (!handle) {
-        ACC_CORE_ERROR("- [ [AcceleratorCSS_MM] Failed to dlopen counterstrikesharp.so: {} ] -", dlerror());
+        ACC_CORE_ERROR("- [ Failed to dlopen counterstrikesharp.so: {} ] -", dlerror());
         return;
     }
 
     void *symbol = dlsym(handle, "RegisterCallbackTrace");
     if (!symbol) {
-        ACC_CORE_ERROR("- [ [AcceleratorCSS_MM] dlsym failed to find RegisterCallbackTrace: {} ] -", dlerror());
+        ACC_CORE_ERROR("- [ dlsym failed to find RegisterCallbackTrace: {} ] -", dlerror());
         return;
     }
 
-    ACC_CORE_INFO("- [ [AcceleratorCSS_MM] Resolved RegisterCallbackTrace at {} ] -", fmt::ptr(symbol));
+    ACC_CORE_INFO("- [ Resolved RegisterCallbackTrace at {} ] -", fmt::ptr(symbol));
     original_RegisterCallbackTrace = reinterpret_cast<RegisterCallbackTraceFn>(symbol);
 
     funchook_t *hook = funchook_create();
     if (!hook) {
-        ACC_CORE_ERROR("- [ [AcceleratorCSS_MM] Failed to create funchook. ] -");
+        ACC_CORE_ERROR("- [ Failed to create funchook. ] -");
         return;
     }
 
     if (funchook_prepare(hook, (void **) &original_RegisterCallbackTrace, (void *) hooked_RegisterCallbackTrace) != 0 ||
         funchook_install(hook, 0) != 0) {
-        ACC_CORE_ERROR("- [ [AcceleratorCSS_MM] Failed to install hook on RegisterCallbackTrace. ] -");
+        ACC_CORE_ERROR("- [ Failed to install hook on RegisterCallbackTrace. ] -");
         return;
     }
 
-    ACC_CORE_INFO("- [ [AcceleratorCSS_MM] Hook installed on RegisterCallbackTrace successfully. ] -");
+    ACC_CORE_INFO("- [ Hook installed on RegisterCallbackTrace successfully. ] -");
 }
 
-static bool dumpCallback(const google_breakpad::MinidumpDescriptor& descriptor, void* context, bool succeeded)
-{
-	ACC_CORE_INFO("Crash detected! Writing custom crash log...");
+static bool dumpCallback(const google_breakpad::MinidumpDescriptor &descriptor, void *context, bool succeeded) {
+    ACC_CORE_CRITICAL("- [ Crash detected! Writing custom crash log... ] -");
 
-	my_strlcpy(dumpStoragePath, descriptor.path(), sizeof(dumpStoragePath));
-	my_strlcat(dumpStoragePath, ".txt", sizeof(dumpStoragePath));
+    my_strlcpy(dumpStoragePath, descriptor.path(), sizeof(dumpStoragePath));
+    my_strlcat(dumpStoragePath, ".txt", sizeof(dumpStoragePath));
 
-	std::ofstream dumpFile(dumpStoragePath, std::ios::out | std::ios::trunc);
-	if (!dumpFile.is_open())
-	{
-		ACC_CORE_ERROR("Failed to open crash log file: {}", dumpStoragePath);
-		return false;
-	}
+    std::ofstream dumpFile(dumpStoragePath, std::ios::out | std::ios::trunc);
+    if (!dumpFile.is_open()) {
+        ACC_CORE_ERROR("- [ Failed to open crash log file: {} ] -", dumpStoragePath);
+        return false;
+    }
 
-	dumpFile << "-------- CONFIG BEGIN --------\n";
-	dumpFile << "Map=" << crashMap << "\n";
-	dumpFile << "GamePath=" << crashGamePath << "\n";
-	dumpFile << "CommandLine=" << crashCommandLine << "\n";
-	dumpFile << "-------- CONFIG END --------\n\n";
+    dumpFile << "-------- CONFIG BEGIN --------\n";
+    dumpFile << "Map=" << crashMap << "\n";
+    dumpFile << "GamePath=" << crashGamePath << "\n";
+    dumpFile << "CommandLine=" << crashCommandLine << "\n";
+    dumpFile << "-------- CONFIG END --------\n\n";
 
-	LoggingSystem_GetLogCapture(&g_MiniDumpComment, false);
-	const char* pszConsoleHistory = g_MiniDumpComment.GetStartPointer();
+    LoggingSystem_GetLogCapture(&g_MiniDumpComment, false);
+    const char *pszConsoleHistory = g_MiniDumpComment.GetStartPointer();
 
-	if (pszConsoleHistory[0])
-	{
-		dumpFile << "-------- CONSOLE HISTORY BEGIN --------\n";
-		dumpFile << pszConsoleHistory;
-		dumpFile << "-------- CONSOLE HISTORY END --------\n\n";
-	}
+    if (pszConsoleHistory[0]) {
+        dumpFile << "-------- CONSOLE HISTORY BEGIN --------\n";
+        dumpFile << pszConsoleHistory;
+        dumpFile << "-------- CONSOLE HISTORY END --------\n\n";
+    }
 
-	dumpFile << "-------- CALLBACK TRACE BEGIN -> NEWEST CALLBACK IS FIRST --------\n";
+    dumpFile << "-------- CALLBACK TRACE BEGIN -> NEWEST CALLBACK IS FIRST --------\n"; {
+        std::lock_guard lock(g_CallbackTraceMutex);
+        for (auto it = g_CallbackTraceBuffer.rbegin(); it != g_CallbackTraceBuffer.rend(); ++it) {
+            dumpFile << "Name: " << it->name << "\n";
+            dumpFile << "Profile: " << it->profile << "\n";
+            dumpFile << "CallerStack:\n" << it->callerStack << "\n";
+            dumpFile << "------------------------\n";
+        }
+    }
 
-	{
-		std::lock_guard lock(g_CallbackTraceMutex);
-		for (auto it = g_CallbackTraceBuffer.rbegin(); it != g_CallbackTraceBuffer.rend(); ++it) {
-		    dumpFile << "Name: " << it->name << "\n";
-		    dumpFile << "Count: " << it->count << "\n";
-		    dumpFile << "Profile: " << it->profile << "\n";
-		    dumpFile << "CallerStack:\n" << it->callerStack << "\n";
-		    dumpFile << "------------------------\n";
-		}
-	}
+    dumpFile << "-------- CALLBACK TRACE END --------\n";
 
-	dumpFile << "-------- CALLBACK TRACE END --------\n";
+    dumpFile.close();
 
-	dumpFile.close();
-
-	ACC_CORE_INFO("Custom crash log written to: {}", dumpStoragePath);
-	return true;
+    ACC_CORE_INFO("Custom crash log written to: {}", dumpStoragePath);
+    return true;
 }
 
 CGameEntitySystem *GameEntitySystem() { return nullptr; }
-class GameSessionConfiguration_t { };
+
+class GameSessionConfiguration_t {
+};
 
 PLUGIN_EXPOSE(AcceleratorCSS_MM, acceleratorcss::gPlugin);
 
 SH_DECL_HOOK3_void(IServerGameDLL, GameFrame, SH_NOATTRIB, 0, bool, bool, bool);
-SH_DECL_HOOK3_void(INetworkServerService, StartupServer, SH_NOATTRIB, 0, const GameSessionConfiguration_t&, ISource2WorldSession*, const char*);
+SH_DECL_HOOK3_void(INetworkServerService, StartupServer, SH_NOATTRIB, 0, const GameSessionConfiguration_t&,
+                   ISource2WorldSession*, const char*);
 
 namespace acceleratorcss {
     AcceleratorCSS_MM gPlugin;
@@ -193,21 +213,20 @@ namespace acceleratorcss {
         PLUGIN_SAVEVARS();
 
         GET_V_IFACE_CURRENT(GetServerFactory, g_pSource2Server, ISource2Server, SOURCE2SERVER_INTERFACE_VERSION);
-        GET_V_IFACE_CURRENT(GetEngineFactory, g_pNetworkServerService, INetworkServerService, NETWORKSERVERSERVICE_INTERFACE_VERSION);
+        GET_V_IFACE_CURRENT(GetEngineFactory, g_pNetworkServerService, INetworkServerService,
+                            NETWORKSERVERSERVICE_INTERFACE_VERSION);
+        GET_V_IFACE_CURRENT(GetEngineFactory, g_pEngineServer, IVEngineServer, INTERFACEVERSION_VENGINESERVER);
 
         strncpy(crashGamePath, ismm->GetBaseDir(), sizeof(crashGamePath) - 1);
         ismm->Format(dumpStoragePath, sizeof(dumpStoragePath), "%s/addons/AcceleratorCSS/logs", ismm->GetBaseDir());
 
         struct stat st = {0};
-        if (stat(dumpStoragePath, &st) == -1)
-        {
-            if(mkdir(dumpStoragePath, 0777) == -1)
-            {
-                ismm->Format(error, maxlen, "%s didn't exist and we couldn't create it :(", dumpStoragePath);
+        if (stat(dumpStoragePath, &st) == -1) {
+            if (mkdir(dumpStoragePath, 0777) == -1) {
+                ACC_CORE_ERROR("- [ Failed to parse config: {} ] -", error);
                 return false;
             }
-        }
-        else
+        } else
             chmod(dumpStoragePath, 0777);
 
         google_breakpad::MinidumpDescriptor descriptor(dumpStoragePath);
@@ -218,7 +237,8 @@ namespace acceleratorcss {
         SignalHandler = oact.sa_sigaction;
 
         SH_ADD_HOOK(IServerGameDLL, GameFrame, g_pSource2Server, SH_MEMBER(this, &AcceleratorCSS_MM::GameFrame), true);
-        SH_ADD_HOOK(INetworkServerService, StartupServer, g_pNetworkServerService, SH_MEMBER(this, &AcceleratorCSS_MM::StartupServer), true);
+        SH_ADD_HOOK(INetworkServerService, StartupServer, g_pNetworkServerService,
+                    SH_MEMBER(this, &AcceleratorCSS_MM::StartupServer), true);
 
         strncpy(crashCommandLine, CommandLine()->GetCmdLine(), sizeof(crashCommandLine) - 1);
 
@@ -227,10 +247,24 @@ namespace acceleratorcss {
 
         Log::Init();
         g_SMAPI->AddListener(this, this);
+
+        try {
+            std::ifstream configFile(AcceleratorCSS::paths::ConfigDirectory());
+            if (configFile.is_open()) {
+                configFile >> g_Config;
+                ACC_CORE_INFO("- [ Config loaded: {} ] -", AcceleratorCSS::paths::ConfigDirectory());
+            } else {
+                ACC_CORE_WARN("- [ Could not open config: {} ] -", AcceleratorCSS::paths::ConfigDirectory());
+            }
+        } catch (const std::exception &e) {
+            ACC_CORE_ERROR("- [ Failed to parse config: {} ] -", e.what());
+        }
+
         HookRegisterCallbackTrace();
+
         g_pluginRegistered = true;
 
-        ACC_CORE_INFO("- [ [AcceleratorCSS_MM] loaded. ] -");
+        ACC_CORE_INFO("- [ MM plugin loaded. ] -");
 
         return true;
     }
@@ -244,12 +278,14 @@ namespace acceleratorcss {
             g_funchook = nullptr;
         }
 
-        SH_REMOVE_HOOK(IServerGameDLL, GameFrame, g_pSource2Server, SH_MEMBER(this, &AcceleratorCSS_MM::GameFrame), true);
-        SH_REMOVE_HOOK(INetworkServerService, StartupServer, g_pNetworkServerService, SH_MEMBER(this, &AcceleratorCSS_MM::StartupServer), true);
+        SH_REMOVE_HOOK(IServerGameDLL, GameFrame, g_pSource2Server, SH_MEMBER(this, &AcceleratorCSS_MM::GameFrame),
+                       true);
+        SH_REMOVE_HOOK(INetworkServerService, StartupServer, g_pNetworkServerService,
+                       SH_MEMBER(this, &AcceleratorCSS_MM::StartupServer), true);
 
         delete exceptionHandler;
 
-        ACC_CORE_INFO("- [ [AcceleratorCSS_MM] unloaded. ] -");
+        ACC_CORE_INFO("- [ MM plugin unloaded. ] -");
 
         return true;
     }
@@ -258,9 +294,9 @@ namespace acceleratorcss {
         std::thread([] {
             std::this_thread::sleep_for(std::chrono::milliseconds(3000));
             if (g_pluginRegistered)
-                ACC_CORE_INFO("- [ [AcceleratorCSS] is active and linked. ] -");
+                ACC_CORE_INFO("- [ MM plugin is active and linked. ] -");
             else
-                ACC_CORE_ERROR("- [ [AcceleratorCSS] CSS plugin did not register itself. ] -");
+                ACC_CORE_ERROR("- [ MM plugin did not register itself. ] -");
         }).detach();
     }
 
@@ -295,7 +331,7 @@ namespace acceleratorcss {
     }
 
     void AcceleratorCSS_MM::StartupServer(const GameSessionConfiguration_t &config, ISource2WorldSession *,
-                                         const char *pszMapName) {
+                                          const char *pszMapName) {
         strncpy(crashMap, pszMapName, sizeof(crashMap) - 1);
     }
 
