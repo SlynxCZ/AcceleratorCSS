@@ -61,6 +61,7 @@ Text logs contain:
 * [spdlog](https://github.com/gabime/spdlog)
 * HL2SDK-CS2 headers
 * Metamod\:Source (CS2 version)
+* [CounterStrikeSharp (v1.0.319) required](https://github.com/roflmuffin/CounterStrikeSharp)
 
 ### Docker + Premake:
 
