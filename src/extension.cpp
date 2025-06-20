@@ -108,13 +108,6 @@ void hooked_RegisterCallbackTrace(const char *name, const char *profile, const c
             g_CallbackTraceBuffer.pop_front();
     }
 
-    ACC_CORE_INFO("-------------------------------");
-    ACC_CORE_INFO("↪ Callback Trace");
-    ACC_CORE_INFO("Name        : {}", sName);
-    ACC_CORE_INFO("Profile     : {}", sProfile);
-    ACC_CORE_INFO("CallerStack : {}", sCaller);
-    ACC_CORE_INFO("-------------------------------");
-
     if (original_RegisterCallbackTrace)
         original_RegisterCallbackTrace(name, profile, callerStack);
 }
