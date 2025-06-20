@@ -1,0 +1,3 @@
+﻿{
+  "ProfileExcludeFilters": ["OnTick", "CheckTransmit", "Display"]
+}

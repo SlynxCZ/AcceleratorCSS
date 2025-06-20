@@ -21,5 +21,6 @@ services:
         make -j$(nproc) &&
         cd ../ &&
         premake5 clion &&
-        cp configs/addons/metamod/AcceleratorCSS.vdf bin/Debug/
+        cp configs/addons/metamod/AcceleratorCSS.vdf bin/Debug/ &&
+        cp configs/addons/AcceleratorCSS/configs.json bin/Debug/
       "
