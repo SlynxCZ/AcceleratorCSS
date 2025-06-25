@@ -112,17 +112,17 @@ void hooked_RegisterCallbackTrace(const char *name, const char *profile, const c
         original_RegisterCallbackTrace(name, profile, callerStack);
 }
 
-void HookRegisterCallbackTrace() {
+bool HookRegisterCallbackTrace() {
     void *handle = dlopen("counterstrikesharp.so", RTLD_NOW | RTLD_NOLOAD);
     if (!handle) {
         ACC_CORE_ERROR("- [ Failed to dlopen counterstrikesharp.so: {} ] -", dlerror());
-        return;
+        return false;
     }
 
     void *symbol = dlsym(handle, "RegisterCallbackTrace");
     if (!symbol) {
         ACC_CORE_ERROR("- [ dlsym failed to find RegisterCallbackTrace: {} ] -", dlerror());
-        return;
+        return false;
     }
 
     ACC_CORE_INFO("- [ Resolved RegisterCallbackTrace at {} ] -", fmt::ptr(symbol));
@@ -131,16 +131,18 @@ void HookRegisterCallbackTrace() {
     funchook_t *hook = funchook_create();
     if (!hook) {
         ACC_CORE_ERROR("- [ Failed to create funchook. ] -");
-        return;
+        return false;
     }
 
     if (funchook_prepare(hook, (void **) &original_RegisterCallbackTrace, (void *) hooked_RegisterCallbackTrace) != 0 ||
         funchook_install(hook, 0) != 0) {
         ACC_CORE_ERROR("- [ Failed to install hook on RegisterCallbackTrace. ] -");
-        return;
+        return false;
     }
 
     ACC_CORE_INFO("- [ Hook installed on RegisterCallbackTrace successfully. ] -");
+
+    return true;
 }
 
 static bool dumpCallback(const google_breakpad::MinidumpDescriptor &descriptor, void *context, bool succeeded) {
@@ -217,6 +219,7 @@ namespace acceleratorcss {
         if (stat(dumpStoragePath, &st) == -1) {
             if (mkdir(dumpStoragePath, 0777) == -1) {
                 ACC_CORE_ERROR("- [ Failed to parse config: {} ] -", error);
+                g_pluginRegistered = false;
                 return false;
             }
         } else
@@ -248,14 +251,12 @@ namespace acceleratorcss {
                 ACC_CORE_INFO("- [ Config loaded: {} ] -", AcceleratorCSS::paths::ConfigDirectory());
             } else {
                 ACC_CORE_WARN("- [ Could not open config: {} ] -", AcceleratorCSS::paths::ConfigDirectory());
+                g_pluginRegistered = false;
             }
         } catch (const std::exception &e) {
             ACC_CORE_ERROR("- [ Failed to parse config: {} ] -", e.what());
+            g_pluginRegistered = false;
         }
-
-        HookRegisterCallbackTrace();
-
-        g_pluginRegistered = true;
 
         ACC_CORE_INFO("- [ MM plugin loaded. ] -");
 
@@ -284,6 +285,10 @@ namespace acceleratorcss {
     }
 
     void AcceleratorCSS_MM::AllPluginsLoaded() {
+        if (!HookRegisterCallbackTrace()) g_pluginRegistered = false;
+
+        g_pluginRegistered = true;
+
         std::thread([] {
             std::this_thread::sleep_for(std::chrono::milliseconds(3000));
             if (g_pluginRegistered)
