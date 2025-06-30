@@ -61,6 +61,7 @@ std::mutex g_CallbackTraceMutex;
 
 namespace fs = std::filesystem;
 
+static std::string lastMap;
 char crashMap[256];
 char crashGamePath[512];
 char crashCommandLine[1024];
@@ -301,6 +302,15 @@ namespace acceleratorcss {
     void AcceleratorCSS_MM::GameFrame(bool simulating, bool bFirstTick, bool bLastTick) {
         bool weHaveBeenFuckedOver = false;
         struct sigaction oact;
+
+        const char* currentMap = g_pNetworkServerService->GetIGameServer()->GetMapName();
+
+        if (currentMap && *currentMap && lastMap != currentMap) {
+            strncpy(crashMap, currentMap, sizeof(crashMap) - 1);
+            lastMap = currentMap;
+
+            ACC_CORE_INFO("- [ Detected map change: %s ] -", currentMap);
+        }
 
         for (int i = 0; i < kNumHandledSignals; ++i) {
             sigaction(kExceptionSignals[i], NULL, &oact);
