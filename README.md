@@ -10,22 +10,23 @@
 
 * Local crash dump creation using Breakpad
 * Custom crash log file generation
-* Full callback trace logging before crash (tracked by `RegisterCallbackTrace`)
-* Runtime hook on CounterStrikeSharp to intercept callback calls
+* Full callback trace logging before crash
+* Runtime hook on CounterStrikeSharp to intercept all callback calls
+* Configurable trace filters (`config.json`)
 * Auto-repair of signal handler detour (in `GameFrame()`)
-* Works independently — **no C# plugin is required**
-* Currently **Linux-only**, but **Windows support is planned**
+* Requires a C# plugin (`AcceleratorCSS_CSS`) to hook callback invocations
+* Currently Linux-only, but Windows support is planned
 
 ---
 
 ## Features
 
-* **Hooked `RegisterCallbackTrace`** to log all executed C# callbacks
-* **Breakpad integration** for safe `.dmp` and `.txt` log generation
-* **Thread-safe ring buffer** for last 5 callback invocations
-* **Hook auto-restoration** of crash signal handlers
-* **Support for late plugin loading**
-* **C# plugin is no longer required**
+* Tracing of **all** executed C# callbacks (not limited to `FunctionReference`)
+* Breakpad integration for safe `.txt` log generation
+* Thread-safe ring buffer for last 5 callback invocations
+* Hook auto-restoration of crash signal handlers
+* Support for late plugin loading
+* Config system for filtering noisy traces (`ProfileExcludeFilters`)
 
 ---
 
@@ -37,10 +38,10 @@ Crash logs are written to:
 /addons/AcceleratorCSS/logs/
 ```
 
-With files:
+Files:
 
 ```
-crash_dump.dmp.txt (callbacks should in .txt, no .dmp!)
+crash_dump.dmp.txt
 ```
 
 Text logs contain:
@@ -48,7 +49,41 @@ Text logs contain:
 * Map, game path, command line
 * Console output buffer
 * Trace of recent callbacks (name, count, stack)
-* **Accurate stacktrace metadata for each C# callback**
+* Accurate stacktrace metadata for each C# callback
+
+---
+
+## Config (`config.json`)
+
+Example:
+
+```json
+{
+  "ProfileExcludeFilters": [
+    "HeartbeatListener",
+    "SomeUnimportantPluginNamespace",
+    "OnTick"
+  ]
+}
+```
+
+This helps reduce log noise by skipping specific callbacks based on profile string matches.
+
+---
+
+## C# Plugin Requirement
+
+Starting from `v1.0.1`, a lightweight C# plugin named `AcceleratorCSS_CSS` is required.
+
+It hooks into the internal execution layer of CounterStrikeSharp and reports callback names, method info, and stacktrace metadata to the native plugin via `RegisterCallbackTrace`.
+
+You can find the plugin in:
+
+```
+/managed/AcceleratorCSS_CSS/
+```
+
+It is automatically built and deployed together with the native plugin when using Docker.
 
 ---
 
@@ -60,8 +95,8 @@ Text logs contain:
 * [Google Breakpad](https://chromium.googlesource.com/breakpad/breakpad/)
 * [spdlog](https://github.com/gabime/spdlog)
 * HL2SDK-CS2 headers
-* Metamod\:Source (CS2 version)
-* [CounterStrikeSharp (v1.0.319) required](https://github.com/roflmuffin/CounterStrikeSharp)
+* Metamod:Source (CS2 version)
+* [CounterStrikeSharp v1.0.319 required](https://github.com/roflmuffin/CounterStrikeSharp)
 
 ### Docker + Premake:
 
@@ -76,19 +111,17 @@ docker compose up --build
 
 ## Integration with CounterStrikeSharp
 
-This plugin will hook the `RegisterCallbackTrace` symbol in `counterstrikesharp.so` automatically — **no C# plugin required**.
+The native plugin hooks `RegisterCallbackTrace`, and the C# plugin (`AcceleratorCSS_CSS`) reports all relevant runtime callback invocations to the native layer.
 
 ---
 
-## Example Logged Trace (this is how i found out why my server crashes after 4 months lol)
+## Example Logged Trace
 
 ```text
 -------- CALLBACK TRACE BEGIN -> NEWEST CALLBACK IS FIRST --------
-Name: CounterStrikeSharp.API.Core.BasePlugin+<>c__DisplayClass51_0`1[[CounterStrikeSharp.API.Core.Listeners+OnTick, CounterStrikeSharp.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]].<RegisterListener>b__2
-Count: 1
+Name: CounterStrikeSharp.API.Core.BasePlugin+<>c__DisplayClass51_0`1[[CounterStrikeSharp.API.Core.Listeners+OnTick, CounterStrikeSharp.API]]
 Profile: ScriptCallback::Execute::<RegisterListener>b__2
-CallerStack:
-JailBreak.JailBreak+<>c__DisplayClass114_1.<EventPlayerDeath>b__3 @ :0
+CallerStack: JailBreak.JailBreak+<>c__DisplayClass114_1.<EventPlayerDeath>b__3 @ :0
 ...
 -------- CALLBACK TRACE END --------
 ```
