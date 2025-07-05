@@ -26,7 +26,7 @@
 * Thread-safe ring buffer for last 5 callback invocations
 * Hook auto-restoration of crash signal handlers
 * Support for late plugin loading
-* Config system for filtering noisy traces (`ProfileExcludeFilters`)
+* Config system for filtering noisy traces (`ProfileExcludeFilters`, defaultly "OnTick", "CheckTransmit", "Display" are blocked)
 
 ---
 
