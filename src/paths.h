@@ -25,6 +25,7 @@ namespace AcceleratorCSS {
         }
 
         inline std::string GetRootDirectory() { return GameDirectory() + "/addons/AcceleratorCSS"; }
+        inline std::string GetLogsDirectory() { return GameDirectory() + "/addons/AcceleratorCSS/logs"; }
         inline std::string ConfigDirectory() { return GameDirectory() + "/addons/AcceleratorCSS/config.json"; }
         inline std::string GamedataDirectory() { return GameDirectory() + "/addons/AcceleratorCSS/gamedata.json"; }
 

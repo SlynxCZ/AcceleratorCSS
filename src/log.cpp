@@ -34,7 +34,7 @@ namespace acceleratorcss {
         sinks.emplace_back(color_sink);
         sinks.emplace_back(file_sink);
 
-        m_core_logger = std::make_shared<spdlog::logger>("AcceleratorCSS", sinks.begin(), sinks.end());
+        m_core_logger = std::make_shared<spdlog::logger>("AcceleratorCSS_MM", sinks.begin(), sinks.end());
         register_logger(m_core_logger);
         m_core_logger->set_level(spdlog::level::trace);
         m_core_logger->flush_on(spdlog::level::info);
@@ -43,7 +43,7 @@ namespace acceleratorcss {
     }
 
     void Log::Close() {
-        spdlog::drop("AcceleratorCSS");
+        spdlog::drop("AcceleratorCSS_MM");
         m_core_logger.reset();
     }
 }

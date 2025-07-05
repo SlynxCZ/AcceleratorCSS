@@ -1,0 +1,16 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AcceleratorCSS_CSS", "AcceleratorCSS_CSS.csproj", "{0D0FD0C6-A1A6-47A7-8370-29CCE2CD4598}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0D0FD0C6-A1A6-47A7-8370-29CCE2CD4598}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0D0FD0C6-A1A6-47A7-8370-29CCE2CD4598}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0D0FD0C6-A1A6-47A7-8370-29CCE2CD4598}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0D0FD0C6-A1A6-47A7-8370-29CCE2CD4598}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

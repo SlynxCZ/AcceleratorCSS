@@ -6,7 +6,7 @@
 #include "CMiniDumpComment.hpp"
 #include "log.h"
 
-#include <funchook.h>
+#include <json.hpp>
 #include <entitysystem.h>
 #include <entity2/entitysystem.h>
 
@@ -61,6 +61,8 @@ std::mutex g_CallbackTraceMutex;
 
 namespace fs = std::filesystem;
 
+ISmmAPI *g_ISmm = nullptr;
+
 static std::string lastMap;
 char crashMap[256];
 char crashGamePath[512];
@@ -76,74 +78,59 @@ const int kExceptionSignals[] = {SIGSEGV, SIGABRT, SIGFPE, SIGILL, SIGBUS};
 const int kNumHandledSignals = std::size(kExceptionSignals);
 
 bool g_pluginRegistered = false;
-funchook_t *g_funchook = nullptr;
 
-using RegisterCallbackTraceFn = void (*)(const char *name, const char *profile, const char *callerStack);
-RegisterCallbackTraceFn original_RegisterCallbackTrace = nullptr;
+auto safeStr = [](const char *str) -> std::string {
+    if (!str)
+        return "[null]";
+    try {
+        return std::string(str);
+    } catch (...) {
+        return "[invalid string]";
+    }
+};
 
-void hooked_RegisterCallbackTrace(const char *name, const char *profile, const char *callerStack) {
-    const std::string sName = name ? name : "";
-    const std::string sProfile = profile ? profile : "";
-    const std::string sCaller = callerStack ? callerStack : "";
+extern "C" DLL_EXPORT void RegisterCallbackTrace(const char* jsonStr)
+{
+    if (!jsonStr) {
+        fprintf(stderr, "Null JSON string!\n");
+        return;
+    }
 
     try {
-        if (acceleratorcss::g_Config.contains("ProfileExcludeFilters")) {
-            const auto &filters = acceleratorcss::g_Config["ProfileExcludeFilters"];
-            bool matched = false;
-            for (const auto &f: filters) {
-                if (sProfile.find(f.get<std::string>()) != std::string::npos) {
-                    matched = true;
-                    break;
+        auto j = nlohmann::json::parse(jsonStr);
+        const std::string sName = j.value("name", "");
+        const std::string sProfile = j.value("profile", "");
+        const std::string sCaller = j.value("caller", "");
+
+        try {
+            if (acceleratorcss::g_Config.contains("ProfileExcludeFilters")) {
+                const auto& filters = acceleratorcss::g_Config["ProfileExcludeFilters"];
+                for (const auto& f : filters) {
+                    if (sName.find(f.get<std::string>()) != std::string::npos) {
+                        return;
+                    }
                 }
             }
-
-            if (matched)
-                return;
+        } catch (const std::exception& e) {
+            ACC_CORE_WARN("- [ ProfileExcludeFilters failed: {} ] -", e.what());
         }
-    } catch (...) {
-        ACC_CORE_WARN("- [ Profile exclude filter failed. ] -");
-    } {
-        std::lock_guard lock(g_CallbackTraceMutex);
-        g_CallbackTraceBuffer.push_back({sName, sProfile, sCaller});
-        if (g_CallbackTraceBuffer.size() > kMaxCallbackTrace)
-            g_CallbackTraceBuffer.pop_front();
-    }
 
-    if (original_RegisterCallbackTrace)
-        original_RegisterCallbackTrace(name, profile, callerStack);
+        {
+            std::lock_guard lock(g_CallbackTraceMutex);
+            g_CallbackTraceBuffer.push_back({sName, sProfile, sCaller});
+            if (g_CallbackTraceBuffer.size() > kMaxCallbackTrace)
+                g_CallbackTraceBuffer.pop_front();
+        }
+
+    } catch (const std::exception& e) {
+        ACC_CORE_WARN("RegisterCallbackTrace exception: {}", e.what());
+    } catch (...) {
+        ACC_CORE_WARN("RegisterCallbackTrace unknown exception");
+    }
 }
 
-bool HookRegisterCallbackTrace() {
-    void *handle = dlopen("counterstrikesharp.so", RTLD_NOW | RTLD_NOLOAD);
-    if (!handle) {
-        ACC_CORE_ERROR("- [ Failed to dlopen counterstrikesharp.so: {} ] -", dlerror());
-        return false;
-    }
-
-    void *symbol = dlsym(handle, "RegisterCallbackTrace");
-    if (!symbol) {
-        ACC_CORE_ERROR("- [ dlsym failed to find RegisterCallbackTrace: {} ] -", dlerror());
-        return false;
-    }
-
-    ACC_CORE_INFO("- [ Resolved RegisterCallbackTrace at {} ] -", fmt::ptr(symbol));
-    original_RegisterCallbackTrace = reinterpret_cast<RegisterCallbackTraceFn>(symbol);
-
-    funchook_t *hook = funchook_create();
-    if (!hook) {
-        ACC_CORE_ERROR("- [ Failed to create funchook. ] -");
-        return false;
-    }
-
-    if (funchook_prepare(hook, (void **) &original_RegisterCallbackTrace, (void *) hooked_RegisterCallbackTrace) != 0 ||
-        funchook_install(hook, 0) != 0) {
-        ACC_CORE_ERROR("- [ Failed to install hook on RegisterCallbackTrace. ] -");
-        return false;
-    }
-
-    ACC_CORE_INFO("- [ Hook installed on RegisterCallbackTrace successfully. ] -");
-
-    return true;
+extern "C" DLL_EXPORT void CssPluginRegistered() {
+    g_pluginRegistered = true;
 }
 
 static bool dumpCallback(const google_breakpad::MinidumpDescriptor &descriptor, void *context, bool succeeded) {
@@ -213,6 +200,8 @@ namespace acceleratorcss {
                             NETWORKSERVERSERVICE_INTERFACE_VERSION);
         GET_V_IFACE_CURRENT(GetEngineFactory, g_pEngineServer, IVEngineServer, INTERFACEVERSION_VENGINESERVER);
 
+        g_ISmm = ismm;
+
         strncpy(crashGamePath, ismm->GetBaseDir(), sizeof(crashGamePath) - 1);
         ismm->Format(dumpStoragePath, sizeof(dumpStoragePath), "%s/addons/AcceleratorCSS/logs", ismm->GetBaseDir());
 
@@ -268,10 +257,6 @@ namespace acceleratorcss {
         Log::Close();
         g_pluginRegistered = false;
 
-        if (g_funchook) {
-            funchook_destroy(g_funchook);
-            g_funchook = nullptr;
-        }
 
         SH_REMOVE_HOOK(IServerGameDLL, GameFrame, g_pSource2Server, SH_MEMBER(this, &AcceleratorCSS_MM::GameFrame),
                        true);
@@ -286,10 +271,6 @@ namespace acceleratorcss {
     }
 
     void AcceleratorCSS_MM::AllPluginsLoaded() {
-        if (!HookRegisterCallbackTrace()) g_pluginRegistered = false;
-
-        g_pluginRegistered = true;
-
         std::thread([] {
             std::this_thread::sleep_for(std::chrono::milliseconds(3000));
             if (g_pluginRegistered)
@@ -303,7 +284,7 @@ namespace acceleratorcss {
         bool weHaveBeenFuckedOver = false;
         struct sigaction oact;
 
-        const char* currentMap = g_pNetworkServerService->GetIGameServer()->GetMapName();
+        const char *currentMap = g_pNetworkServerService->GetIGameServer()->GetMapName();
 
         if (currentMap && *currentMap && lastMap != currentMap) {
             strncpy(crashMap, currentMap, sizeof(crashMap) - 1);
