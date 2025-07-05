@@ -67,7 +67,7 @@ Example:
 }
 ```
 
-This helps reduce log noise by skipping specific callbacks based on profile string matches.
+This helps reduce log noise by skipping specific callbacks based on profile string matches, defaultly "OnTick", "CheckTransmit", "Display" are blocked.
 
 ---
 
