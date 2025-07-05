@@ -329,7 +329,7 @@ namespace acceleratorcss {
     const char *AcceleratorCSS_MM::GetDescription() { return "Local crash handler for C# plugins"; }
     const char *AcceleratorCSS_MM::GetURL() { return "https://funplay.pro/"; }
     const char *AcceleratorCSS_MM::GetLicense() { return "GPLv3"; }
-    const char *AcceleratorCSS_MM::GetVersion() { return "1.0.0"; }
+    const char *AcceleratorCSS_MM::GetVersion() { return "1.0.1"; }
     const char *AcceleratorCSS_MM::GetDate() { return __DATE__; }
     const char *AcceleratorCSS_MM::GetLogTag() { return "ACC"; }
 }
