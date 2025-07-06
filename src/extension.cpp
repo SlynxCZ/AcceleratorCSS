@@ -89,7 +89,7 @@ auto safeStr = [](const char *str) -> std::string {
     }
 };
 
-extern "C" DLL_EXPORT void RegisterCallbackTrace(const char* jsonStr)
+DLL_EXPORT void RegisterCallbackTrace(const char* jsonStr)
 {
     if (!jsonStr) {
         fprintf(stderr, "Null JSON string!\n");
@@ -129,8 +129,33 @@ extern "C" DLL_EXPORT void RegisterCallbackTrace(const char* jsonStr)
     }
 }
 
-extern "C" DLL_EXPORT void CssPluginRegistered() {
+DLL_EXPORT bool CssPluginRegistered() {
     g_pluginRegistered = true;
+    bool g_LightweightMode = true;
+
+    try {
+        std::ifstream configFile(AcceleratorCSS::paths::ConfigDirectory());
+        if (configFile.is_open()) {
+            configFile >> acceleratorcss::g_Config;
+
+            if (acceleratorcss::g_Config.contains("LightweightMode") && acceleratorcss::g_Config["LightweightMode"].is_boolean()) {
+                g_LightweightMode = acceleratorcss::g_Config["LightweightMode"].get<bool>();
+                ACC_CORE_INFO("- [ LightweightMode: {} ] -", g_LightweightMode ? "true" : "false");
+            } else {
+                ACC_CORE_INFO("- [ Config missing 'LightweightMode' key, defaulting to true ] -");
+            }
+
+            ACC_CORE_INFO("- [ Config loaded: {} ] -", AcceleratorCSS::paths::ConfigDirectory());
+        } else {
+            ACC_CORE_WARN("- [ Could not open config: {} ] -", AcceleratorCSS::paths::ConfigDirectory());
+            g_LightweightMode = true;
+        }
+    } catch (const std::exception &e) {
+        ACC_CORE_ERROR("- [ Failed to parse config: {} ] -", e.what());
+        g_LightweightMode = true;
+    }
+
+    return g_LightweightMode;
 }
 
 static bool dumpCallback(const google_breakpad::MinidumpDescriptor &descriptor, void *context, bool succeeded) {
@@ -290,7 +315,7 @@ namespace acceleratorcss {
             strncpy(crashMap, currentMap, sizeof(crashMap) - 1);
             lastMap = currentMap;
 
-            ACC_CORE_INFO("- [ Detected map change: %s ] -", currentMap);
+            ACC_CORE_INFO("- [ Detected map change: {} ] -", currentMap);
         }
 
         for (int i = 0; i < kNumHandledSignals; ++i) {
@@ -329,7 +354,7 @@ namespace acceleratorcss {
     const char *AcceleratorCSS_MM::GetDescription() { return "Local crash handler for C# plugins"; }
     const char *AcceleratorCSS_MM::GetURL() { return "https://funplay.pro/"; }
     const char *AcceleratorCSS_MM::GetLicense() { return "GPLv3"; }
-    const char *AcceleratorCSS_MM::GetVersion() { return "1.0.1"; }
+    const char *AcceleratorCSS_MM::GetVersion() { return "1.0.2"; }
     const char *AcceleratorCSS_MM::GetDate() { return __DATE__; }
     const char *AcceleratorCSS_MM::GetLogTag() { return "ACC"; }
 }

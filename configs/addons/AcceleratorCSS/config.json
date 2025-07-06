@@ -1,3 +1,4 @@
 ﻿{
+  "LightweightMode": true,
   "ProfileExcludeFilters": ["OnTick", "CheckTransmit", "Display"]
 }

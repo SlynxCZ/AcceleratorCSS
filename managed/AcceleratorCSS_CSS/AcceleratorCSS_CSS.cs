@@ -7,25 +7,23 @@ using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using HarmonyLib;
 
+// ReSharper disable InconsistentNaming
+
 namespace AcceleratorCSS_CSS;
 
 // ReSharper disable once InconsistentNaming
+// ReSharper disable once UnusedType.Global
 public class AcceleratorCSS_CSS : BasePlugin
 {
-    internal static AcceleratorCSS_CSS Instance = null!;
     private Harmony? _harmony;
+    private static bool LightweightMode { get; set; }
 
     public override string ModuleName => "AcceleratorCSS_CSS";
-    public override string ModuleVersion => "1.0.0";
+    public override string ModuleVersion => "1.0.2";
     public override string ModuleAuthor => "Slynx";
     public override string ModuleDescription => "AcceleratorCSS's C# side";
 
-    private static RegisterCallbackJsonDelegate? _nativeTraceJson;
-
-    public AcceleratorCSS_CSS()
-    {
-        Instance = this;
-    }
+    private static RegisterCallbackJsonDelegate? NativeTraceJson;
 
     public override void Load(bool hotReload)
     {
@@ -38,9 +36,10 @@ public class AcceleratorCSS_CSS : BasePlugin
         _harmony?.UnpatchAll("AcceleratorCSS_CSS");
     }
 
-    public void OnMetamodAllPluginsLoaded()
+    private void OnMetamodAllPluginsLoaded()
     {
-        var path = Path.Combine(Server.GameDirectory, "csgo", "addons", "AcceleratorCSS", "bin", "linuxsteamrt64", "AcceleratorCSS.so");
+        var path = Path.Combine(Server.GameDirectory, "csgo", "addons", "AcceleratorCSS", "bin", "linuxsteamrt64",
+            "AcceleratorCSS.so");
 
         if (!File.Exists(path))
         {
@@ -52,11 +51,11 @@ public class AcceleratorCSS_CSS : BasePlugin
         {
             var handle = NativeLibrary.Load(path);
             var fnPtr = NativeLibrary.GetExport(handle, "RegisterCallbackTrace");
-            _nativeTraceJson = Marshal.GetDelegateForFunctionPointer<RegisterCallbackJsonDelegate>(fnPtr);
+            NativeTraceJson = Marshal.GetDelegateForFunctionPointer<RegisterCallbackJsonDelegate>(fnPtr);
 
             var initPtr = NativeLibrary.GetExport(handle, "CssPluginRegistered");
             var initFn = Marshal.GetDelegateForFunctionPointer<CssPluginRegisteredDelegate>(initPtr);
-            initFn();
+            LightweightMode = initFn();
 
             Prints.ServerLog("[AcceleratorCSS_CSS] Native library successfully loaded.", ConsoleColor.Green);
         }
@@ -81,32 +80,38 @@ public class AcceleratorCSS_CSS : BasePlugin
 
             foreach (var type in SafeGetTypes(asm))
             {
-                if (type == null || type.Namespace?.StartsWith("System") == true)
+                if (type == null! || type.Namespace?.StartsWith("System") == true)
                     continue;
 
-                foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static))
+                foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic |
+                                                       BindingFlags.Instance | BindingFlags.Static))
                 {
-                    if (method == null || method.IsAbstract || method.IsConstructor || method.IsGenericMethod)
+                    if (method == null! || method.IsAbstract || method.IsConstructor || method.IsGenericMethod)
                         continue;
 
                     if (method.Name.StartsWith("get_") || method.Name.StartsWith("set_"))
                         continue;
 
+                    // ReSharper disable once ConditionalAccessQualifierIsNonNullableAccordingToAPIContract
                     if (method.Name.Contains("Invoke") || method.DeclaringType?.Name?.Contains("TraceFilter") == true)
                         continue;
 
                     var parameters = method.GetParameters();
                     if (parameters.Length == 1 && (
-                        parameters[0].ParameterType == typeof(IntPtr) ||
-                        parameters[0].ParameterType.Name.Contains("*")))
+                            parameters[0].ParameterType == typeof(IntPtr) ||
+                            parameters[0].ParameterType.Name.Contains("*")))
                         continue;
 
                     try
                     {
-                        var prefix = new HarmonyMethod(typeof(AcceleratorCSS_CSS).GetMethod(nameof(TracePrefix), BindingFlags.Static | BindingFlags.NonPublic));
+                        var prefix = new HarmonyMethod(typeof(AcceleratorCSS_CSS).GetMethod(nameof(TracePrefix),
+                            BindingFlags.Static | BindingFlags.NonPublic));
                         _harmony.Patch(method, prefix: prefix);
                     }
-                    catch { /* Silently fail */ }
+                    catch
+                    {
+                        /* Silently fail */
+                    }
                 }
             }
         }
@@ -114,19 +119,29 @@ public class AcceleratorCSS_CSS : BasePlugin
         Prints.ServerLog("[AcceleratorCSS_CSS] All methods patched with Harmony.", ConsoleColor.DarkGreen);
     }
 
+    // ReSharper disable once UnusedParameter.Local
     private static bool TracePrefix(MethodBase __originalMethod, object __instance, object[]? __args)
     {
         try
         {
+            // ReSharper disable once ConditionalAccessQualifierIsNonNullableAccordingToAPIContract
             var method = CleanMethodName($"{__originalMethod?.DeclaringType?.FullName}::{__originalMethod?.Name}");
-            var args = __args != null ? string.Join(", ", __args.Select(SafeToString)) : "null";
-            var stack = new StackTrace(2, true).ToString();
-
             method = TrimAndClean(method, 512);
-            args = TrimAndClean(args, 2048);
-            stack = TrimAndClean(stack, 4096);
 
-            SafeNativeTrace(method, args, stack);
+            if (LightweightMode)
+            {
+                SafeNativeTrace(method, "Lightweight mode is enabled - no profile given", "Lightweight mode is enabled - no full stacktrace given");
+            }
+            else
+            {
+                var args = __args != null ? string.Join(", ", __args.Select(SafeToString)) : "null";
+                var stack = new StackTrace(2, true).ToString();
+
+                args = TrimAndClean(args, 2048);
+                stack = TrimAndClean(stack, 4096);
+
+                SafeNativeTrace(method, args, stack);
+            }
         }
         catch (Exception ex)
         {
@@ -138,7 +153,7 @@ public class AcceleratorCSS_CSS : BasePlugin
 
     private static void SafeNativeTrace(string name, string profile, string stack)
     {
-        if (_nativeTraceJson == null)
+        if (NativeTraceJson == null)
             return;
 
         var payload = new
@@ -153,12 +168,12 @@ public class AcceleratorCSS_CSS : BasePlugin
             Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         });
 
-        _nativeTraceJson(json);
+        NativeTraceJson(json);
     }
 
     private static string CleanMethodName(string input)
     {
-        string[] unwanted = { "System.", "Microsoft.", "CounterStrikeSharp.API.", "<>c__DisplayClass", "lambda_method" };
+        string[] unwanted = ["System.", "Microsoft.", "CounterStrikeSharp.API.", "<>c__DisplayClass", "lambda_method"];
         foreach (var pattern in unwanted)
             input = input.Replace(pattern, "");
         return input;
@@ -166,8 +181,14 @@ public class AcceleratorCSS_CSS : BasePlugin
 
     private static string SafeToString(object? obj)
     {
-        try { return obj?.ToString() ?? "null"; }
-        catch { return "[toString_failed]"; }
+        try
+        {
+            return obj?.ToString() ?? "null";
+        }
+        catch
+        {
+            return "[toString_failed]";
+        }
     }
 
     private static string TrimAndClean(string input, int maxLength)
@@ -189,7 +210,7 @@ public class AcceleratorCSS_CSS : BasePlugin
     }
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private delegate void CssPluginRegisteredDelegate();
+    private delegate bool CssPluginRegisteredDelegate();
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void RegisterCallbackJsonDelegate(
@@ -211,8 +232,14 @@ public class AcceleratorCSS_CSS : BasePlugin
 
     private static Type[] SafeGetTypes(Assembly asm)
     {
-        try { return asm.GetTypes(); }
-        catch { return Array.Empty<Type>(); }
+        try
+        {
+            return asm.GetTypes();
+        }
+        catch
+        {
+            return Array.Empty<Type>();
+        }
     }
 }
 
