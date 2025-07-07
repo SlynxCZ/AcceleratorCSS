@@ -59,6 +59,7 @@ Example:
 
 ```json
 {
+  "LightweightMode": true,
   "ProfileExcludeFilters": [
     "HeartbeatListener",
     "SomeUnimportantPluginNamespace",
@@ -67,7 +68,7 @@ Example:
 }
 ```
 
-This helps reduce log noise by skipping specific callbacks based on profile string matches, defaultly "OnTick", "CheckTransmit", "Display" are blocked.
+In config you can set LightweightMode, this helps reducing power usage at cost of logging only method names (eg: Namespace.Class.OnAnyCommandExecuted), also you can set filters, this helps reduce log noise by skipping specific callbacks based on profile string matches, defaultly "OnTick", "CheckTransmit", "Display" are blocked.
 
 ---
 
