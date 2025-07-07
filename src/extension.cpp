@@ -48,7 +48,7 @@
 #include "processor/stackwalk_common.h"
 #include "processor/pathname_stripper.h"
 
-constexpr size_t kMaxCallbackTrace = 5;
+constexpr int kMaxCallbackTrace = 5;
 
 struct CallbackTraceEntry {
     std::string name;
@@ -56,7 +56,8 @@ struct CallbackTraceEntry {
     std::string callerStack;
 };
 
-std::deque<CallbackTraceEntry> g_CallbackTraceBuffer;
+std::array<CallbackTraceEntry, kMaxCallbackTrace> g_CallbackTraceBuffer;
+size_t g_CallbackTraceIndex = 0;
 std::mutex g_CallbackTraceMutex;
 
 namespace fs = std::filesystem;
@@ -89,73 +90,68 @@ auto safeStr = [](const char *str) -> std::string {
     }
 };
 
-DLL_EXPORT void RegisterCallbackTrace(const char* jsonStr)
-{
-    if (!jsonStr) {
-        fprintf(stderr, "Null JSON string!\n");
-        return;
-    }
+struct PluginConfig {
+    bool LightweightMode;
+    const char* FiltersPtr;
+};
 
-    try {
-        auto j = nlohmann::json::parse(jsonStr);
-        const std::string sName = j.value("name", "");
-        const std::string sProfile = j.value("profile", "");
-        const std::string sCaller = j.value("caller", "");
+DLL_EXPORT void RegisterCallbackTraceBinary(const void* data, size_t len) {
+    if (!data || len < 6) return;
 
-        try {
-            if (acceleratorcss::g_Config.contains("ProfileExcludeFilters")) {
-                const auto& filters = acceleratorcss::g_Config["ProfileExcludeFilters"];
-                for (const auto& f : filters) {
-                    if (sName.find(f.get<std::string>()) != std::string::npos) {
-                        return;
-                    }
-                }
-            }
-        } catch (const std::exception& e) {
-            ACC_CORE_WARN("- [ ProfileExcludeFilters failed: {} ] -", e.what());
-        }
+    const char* raw = reinterpret_cast<const char*>(data);
+    uint16_t nameLen = *reinterpret_cast<const uint16_t*>(raw);
+    uint16_t profileLen = *reinterpret_cast<const uint16_t*>(raw + 2);
+    uint16_t stackLen = *reinterpret_cast<const uint16_t*>(raw + 4);
 
-        {
-            std::lock_guard lock(g_CallbackTraceMutex);
-            g_CallbackTraceBuffer.push_back({sName, sProfile, sCaller});
-            if (g_CallbackTraceBuffer.size() > kMaxCallbackTrace)
-                g_CallbackTraceBuffer.pop_front();
-        }
+    if (len < 6 + nameLen + profileLen + stackLen) return;
 
-    } catch (const std::exception& e) {
-        ACC_CORE_WARN("RegisterCallbackTrace exception: {}", e.what());
-    } catch (...) {
-        ACC_CORE_WARN("RegisterCallbackTrace unknown exception");
-    }
+    std::string name(raw + 6, nameLen);
+    std::string profile(raw + 6 + nameLen, profileLen);
+    std::string stack(raw + 6 + nameLen + profileLen, stackLen);
+
+    std::lock_guard lock(g_CallbackTraceMutex);
+    g_CallbackTraceBuffer[g_CallbackTraceIndex % kMaxCallbackTrace] = {std::move(name), std::move(profile), std::move(stack)};
+    g_CallbackTraceIndex++;
 }
 
-DLL_EXPORT bool CssPluginRegistered() {
-    g_pluginRegistered = true;
-    bool g_LightweightMode = true;
+DLL_EXPORT PluginConfig CssPluginRegistered()
+{
+    static std::string filtersJoined;
+
+    PluginConfig config{};
+    config.LightweightMode = true;
 
     try {
         std::ifstream configFile(AcceleratorCSS::paths::ConfigDirectory());
         if (configFile.is_open()) {
-            configFile >> acceleratorcss::g_Config;
+            nlohmann::json j;
+            configFile >> j;
 
-            if (acceleratorcss::g_Config.contains("LightweightMode") && acceleratorcss::g_Config["LightweightMode"].is_boolean()) {
-                g_LightweightMode = acceleratorcss::g_Config["LightweightMode"].get<bool>();
-                ACC_CORE_INFO("- [ LightweightMode: {} ] -", g_LightweightMode ? "true" : "false");
-            } else {
-                ACC_CORE_INFO("- [ Config missing 'LightweightMode' key, defaulting to true ] -");
+            if (j.contains("LightweightMode") && j["LightweightMode"].is_boolean())
+                config.LightweightMode = j["LightweightMode"].get<bool>();
+
+            if (j.contains("ProfileExcludeFilters") && j["ProfileExcludeFilters"].is_array()) {
+                std::ostringstream oss;
+                for (const auto& item : j["ProfileExcludeFilters"]) {
+                    if (item.is_string())
+                        oss << item.get<std::string>() << ",";
+                }
+
+                filtersJoined = oss.str();
+                if (!filtersJoined.empty() && filtersJoined.back() == ',')
+                    filtersJoined.pop_back();
+
+                config.FiltersPtr = filtersJoined.c_str();
             }
 
-            ACC_CORE_INFO("- [ Config loaded: {} ] -", AcceleratorCSS::paths::ConfigDirectory());
-        } else {
-            ACC_CORE_WARN("- [ Could not open config: {} ] -", AcceleratorCSS::paths::ConfigDirectory());
-            g_LightweightMode = true;
+            g_pluginRegistered = true;
         }
-    } catch (const std::exception &e) {
-        ACC_CORE_ERROR("- [ Failed to parse config: {} ] -", e.what());
-        g_LightweightMode = true;
+    } catch (...) {
+        filtersJoined = "OnTick,CheckTransmit,Display";
+        config.FiltersPtr = filtersJoined.c_str();
     }
 
-    return g_LightweightMode;
+    return config;
 }
 
 static bool dumpCallback(const google_breakpad::MinidumpDescriptor &descriptor, void *context, bool succeeded) {
@@ -185,16 +181,18 @@ static bool dumpCallback(const google_breakpad::MinidumpDescriptor &descriptor, 
         dumpFile << "-------- CONSOLE HISTORY END --------\n\n";
     }
 
-    dumpFile << "-------- CALLBACK TRACE BEGIN -> NEWEST CALLBACK IS FIRST --------\n"; {
+    dumpFile << "-------- CALLBACK TRACE BEGIN --------\n";
+    {
         std::lock_guard lock(g_CallbackTraceMutex);
-        for (auto it = g_CallbackTraceBuffer.rbegin(); it != g_CallbackTraceBuffer.rend(); ++it) {
-            dumpFile << "Name: " << it->name << "\n";
-            dumpFile << "Profile: " << it->profile << "\n";
-            dumpFile << "CallerStack:\n" << it->callerStack << "\n";
-            dumpFile << "------------------------\n";
+        for (int i = 0; i < std::min(kMaxCallbackTrace, (int)g_CallbackTraceIndex); ++i) {
+            size_t idx = (g_CallbackTraceIndex - 1 - i) % kMaxCallbackTrace;
+            const auto& entry = g_CallbackTraceBuffer[idx];
+            dumpFile << "Name: " << entry.name << "\n";
+            dumpFile << "Profile: " << entry.profile << "\n";
+            dumpFile << "Stack:\n" << entry.callerStack << "\n";
+            dumpFile << "-----------------------------\n";
         }
     }
-
     dumpFile << "-------- CALLBACK TRACE END --------\n";
 
     dumpFile.close();
@@ -354,7 +352,7 @@ namespace acceleratorcss {
     const char *AcceleratorCSS_MM::GetDescription() { return "Local crash handler for C# plugins"; }
     const char *AcceleratorCSS_MM::GetURL() { return "https://funplay.pro/"; }
     const char *AcceleratorCSS_MM::GetLicense() { return "GPLv3"; }
-    const char *AcceleratorCSS_MM::GetVersion() { return "1.0.2"; }
+    const char *AcceleratorCSS_MM::GetVersion() { return "1.0.3"; }
     const char *AcceleratorCSS_MM::GetDate() { return __DATE__; }
     const char *AcceleratorCSS_MM::GetLogTag() { return "ACC"; }
 }

@@ -1,29 +1,34 @@
-﻿using System.Diagnostics;
+﻿//
+// Created by Michal Přikryl on 12.06.2025.
+// Copyright (c) 2025 slynxcz. All rights reserved.
+//
+using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Text.Json;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using HarmonyLib;
 
 // ReSharper disable InconsistentNaming
-
 namespace AcceleratorCSS_CSS;
 
-// ReSharper disable once InconsistentNaming
-// ReSharper disable once UnusedType.Global
 public class AcceleratorCSS_CSS : BasePlugin
 {
-    private Harmony? _harmony;
-    private static bool LightweightMode { get; set; }
-
     public override string ModuleName => "AcceleratorCSS_CSS";
-    public override string ModuleVersion => "1.0.2";
-    public override string ModuleAuthor => "Slynx";
-    public override string ModuleDescription => "AcceleratorCSS's C# side";
+    public override string ModuleVersion => "1.0.3";
+    private Harmony? _harmony;
+    public static bool Lightweight;
+    private static RegisterCallbackTraceBinary? NativeBinary;
+    private static string[] FilterList = [];
+    [StructLayout(LayoutKind.Sequential)]
+    public struct PluginConfig
+    {
+        [MarshalAs(UnmanagedType.U1)]
+        public bool LightweightMode;
 
-    private static RegisterCallbackJsonDelegate? NativeTraceJson;
+        public IntPtr FiltersPtr;
+    }
 
     public override void Load(bool hotReload)
     {
@@ -38,8 +43,7 @@ public class AcceleratorCSS_CSS : BasePlugin
 
     private void OnMetamodAllPluginsLoaded()
     {
-        var path = Path.Combine(Server.GameDirectory, "csgo", "addons", "AcceleratorCSS", "bin", "linuxsteamrt64",
-            "AcceleratorCSS.so");
+        var path = Path.Combine(Server.GameDirectory, "csgo", "addons", "AcceleratorCSS", "bin", "linuxsteamrt64", "AcceleratorCSS.so");
 
         if (!File.Exists(path))
         {
@@ -50,12 +54,28 @@ public class AcceleratorCSS_CSS : BasePlugin
         try
         {
             var handle = NativeLibrary.Load(path);
-            var fnPtr = NativeLibrary.GetExport(handle, "RegisterCallbackTrace");
-            NativeTraceJson = Marshal.GetDelegateForFunctionPointer<RegisterCallbackJsonDelegate>(fnPtr);
+
+            var fnPtr = NativeLibrary.GetExport(handle, "RegisterCallbackTraceBinary");
+            NativeBinary = Marshal.GetDelegateForFunctionPointer<RegisterCallbackTraceBinary>(fnPtr);
 
             var initPtr = NativeLibrary.GetExport(handle, "CssPluginRegistered");
             var initFn = Marshal.GetDelegateForFunctionPointer<CssPluginRegisteredDelegate>(initPtr);
-            LightweightMode = initFn();
+            var config = initFn();
+
+            Lightweight = config.LightweightMode;
+
+            if (config.FiltersPtr != IntPtr.Zero)
+            {
+                var filters = Marshal.PtrToStringUTF8(config.FiltersPtr);
+                if (!string.IsNullOrEmpty(filters))
+                {
+                    if (!string.IsNullOrEmpty(filters))
+                    {
+                        FilterList = filters.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    }
+                    Prints.ServerLog($"[AcceleratorCSS_CSS] Filters received: {filters}", ConsoleColor.Yellow);
+                }
+            }
 
             Prints.ServerLog("[AcceleratorCSS_CSS] Native library successfully loaded.", ConsoleColor.Green);
         }
@@ -119,103 +139,65 @@ public class AcceleratorCSS_CSS : BasePlugin
         Prints.ServerLog("[AcceleratorCSS_CSS] All methods patched with Harmony.", ConsoleColor.DarkGreen);
     }
 
-    // ReSharper disable once UnusedParameter.Local
+    private static bool ShouldFilter(string name)
+    {
+        return FilterList.Any(filter => name.Contains(filter, StringComparison.OrdinalIgnoreCase));
+    }
+
     private static bool TracePrefix(MethodBase __originalMethod, object __instance, object[]? __args)
     {
         try
         {
-            // ReSharper disable once ConditionalAccessQualifierIsNonNullableAccordingToAPIContract
-            var method = CleanMethodName($"{__originalMethod?.DeclaringType?.FullName}::{__originalMethod?.Name}");
-            method = TrimAndClean(method, 512);
+            var name = Trim($"{__originalMethod?.DeclaringType?.FullName}::{__originalMethod?.Name}", 512);
 
-            if (LightweightMode)
-            {
-                SafeNativeTrace(method, "Lightweight mode is enabled - no profile given", "Lightweight mode is enabled - no full stacktrace given");
-            }
-            else
-            {
-                var args = __args != null ? string.Join(", ", __args.Select(SafeToString)) : "null";
-                var stack = new StackTrace(2, true).ToString();
+            if (ShouldFilter(name))
+                return true;
 
-                args = TrimAndClean(args, 2048);
-                stack = TrimAndClean(stack, 4096);
-
-                SafeNativeTrace(method, args, stack);
-            }
+            string profile = Lightweight ? "LW" : Trim(string.Join(", ", __args?.Select(SafeToString) ?? []), 2048);
+            string stack = Lightweight ? "LW" : Trim(new StackTrace(2, true).ToString(), 4096);
+            SendBinary(name, profile, stack);
         }
-        catch (Exception ex)
+        catch
         {
-            Console.WriteLine($"[AcceleratorCSS] TracePrefix exception: {ex.Message}");
+            // ignored
         }
 
         return true;
     }
 
-    private static void SafeNativeTrace(string name, string profile, string stack)
+    private static void SendBinary(string name, string profile, string stack)
     {
-        if (NativeTraceJson == null)
-            return;
+        if (NativeBinary == null) return;
 
-        var payload = new
-        {
-            name,
-            profile,
-            caller = stack
-        };
+        var nameBytes = Encoding.UTF8.GetBytes(name);
+        var profileBytes = Encoding.UTF8.GetBytes(profile);
+        var stackBytes = Encoding.UTF8.GetBytes(stack);
 
-        string json = JsonSerializer.Serialize(payload, new JsonSerializerOptions
-        {
-            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-        });
+        var buffer = new byte[6 + nameBytes.Length + profileBytes.Length + stackBytes.Length];
+        BitConverter.GetBytes((ushort)nameBytes.Length).CopyTo(buffer, 0);
+        BitConverter.GetBytes((ushort)profileBytes.Length).CopyTo(buffer, 2);
+        BitConverter.GetBytes((ushort)stackBytes.Length).CopyTo(buffer, 4);
+        Buffer.BlockCopy(nameBytes, 0, buffer, 6, nameBytes.Length);
+        Buffer.BlockCopy(profileBytes, 0, buffer, 6 + nameBytes.Length, profileBytes.Length);
+        Buffer.BlockCopy(stackBytes, 0, buffer, 6 + nameBytes.Length + profileBytes.Length, stackBytes.Length);
 
-        NativeTraceJson(json);
-    }
-
-    private static string CleanMethodName(string input)
-    {
-        string[] unwanted = ["System.", "Microsoft.", "CounterStrikeSharp.API.", "<>c__DisplayClass", "lambda_method"];
-        foreach (var pattern in unwanted)
-            input = input.Replace(pattern, "");
-        return input;
+        NativeBinary(buffer, buffer.Length);
     }
 
     private static string SafeToString(object? obj)
     {
-        try
-        {
-            return obj?.ToString() ?? "null";
-        }
-        catch
-        {
-            return "[toString_failed]";
-        }
+        try { return obj?.ToString() ?? "null"; } catch { return "[error]"; }
     }
 
-    private static string TrimAndClean(string input, int maxLength)
+    private static string Trim(string str, int max)
     {
-        if (string.IsNullOrWhiteSpace(input))
-            return "<empty>";
-
-        var builder = new StringBuilder(Math.Min(input.Length, maxLength));
-        foreach (var ch in input)
-        {
-            if (builder.Length >= maxLength) break;
-            if (char.IsControl(ch) || char.IsSurrogate(ch) || ch == '\uFFFD' || ch < 32 || ch > 0xFFFD)
-                builder.Append('?');
-            else
-                builder.Append(ch);
-        }
-
-        return builder.ToString().Trim();
+        return str.Length <= max ? str : str[..max];
     }
 
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private delegate bool CssPluginRegisteredDelegate();
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private delegate void RegisterCallbackJsonDelegate(
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string json
-    );
+    private static Type[] SafeGetTypes(Assembly asm)
+    {
+        try { return asm.GetTypes(); } catch { return []; }
+    }
 
     private static bool ReferencesCounterStrikeSharpApi(Assembly asm)
     {
@@ -230,17 +212,11 @@ public class AcceleratorCSS_CSS : BasePlugin
         }
     }
 
-    private static Type[] SafeGetTypes(Assembly asm)
-    {
-        try
-        {
-            return asm.GetTypes();
-        }
-        catch
-        {
-            return Array.Empty<Type>();
-        }
-    }
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate PluginConfig CssPluginRegisteredDelegate();
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void RegisterCallbackTraceBinary(byte[] data, int len);
 }
 
 public static class Prints
