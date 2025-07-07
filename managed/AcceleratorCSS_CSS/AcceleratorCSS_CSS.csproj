@@ -9,6 +9,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>..\0Harmony.dll</HintPath>
+    </Reference>
     <Reference Include="CounterStrikeSharp.API">
       <HintPath>..\CounterStrikeSharp.API.dll</HintPath>
     </Reference>
@@ -17,15 +20,5 @@
   <ItemGroup>
     <PackageReference Include="Lib.Harmony" Version="2.3.6" />
   </ItemGroup>
-
-  <Target Name="CopyHarmonyToShared" AfterTargets="Build" Condition="'$(CopyHarmony)' == 'true'">
-    <ItemGroup>
-      <HarmonyDll Include="$(UserProfile)\.nuget\packages\lib.harmony\2.3.6\lib\net8.0\0Harmony.dll" />
-    </ItemGroup>
-    <Copy
-      SourceFiles="@(HarmonyDll)"
-      DestinationFolder="$(OutputPath)"
-      SkipUnchangedFiles="true" />
-  </Target>
 
 </Project>

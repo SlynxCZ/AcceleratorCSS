@@ -1,11 +1,10 @@
-﻿version: "3.9"
-
-services:
+﻿services:
   builder:
     build:
       context: ./docker
     volumes:
       - ./:/project
+      - nuget_cache:/root/.nuget/packages
     working_dir: /project
     environment:
       HL2SDKCS2: /project/vendor/hl2sdk-cs2
@@ -21,6 +20,12 @@ services:
         make -j$(nproc) &&
         cd ../ &&
         premake5 clion &&
+
+        dotnet publish ./managed/AcceleratorCSS_CSS/AcceleratorCSS_CSS.csproj -c Release -o bin/Debug/AcceleratorCSS_CSS &&
+
         cp configs/addons/metamod/AcceleratorCSS.vdf bin/Debug/ &&
         cp configs/addons/AcceleratorCSS/config.json bin/Debug/
       "
+
+volumes:
+  nuget_cache:
