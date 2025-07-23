@@ -115,8 +115,6 @@ DLL_EXPORT void RegisterCallbackTraceBinary(const void* data, size_t len) {
 
     if (config.LogCallbacksToConsole) {
         ACC_CORE_INFO("[Callback] Name: {}", name);
-        ACC_CORE_INFO("[Callback] Profile: {}", profile);
-        ACC_CORE_INFO("[Callback] Stack:\n{}", stack);
     }
 
     std::lock_guard lock(g_CallbackTraceMutex);
