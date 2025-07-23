@@ -1,4 +1,6 @@
 ﻿{
-  "LightweightMode": true,
+  "LightweightMode": false,
+  "LogCallbacksToConsole": false,
+  "CallbackLogSize": 20,
   "ProfileExcludeFilters": ["OnTick", "CheckTransmit", "Display"]
 }

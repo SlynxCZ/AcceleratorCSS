@@ -48,7 +48,7 @@
 #include "processor/stackwalk_common.h"
 #include "processor/pathname_stripper.h"
 
-constexpr int kMaxCallbackTrace = 5;
+size_t g_MaxCallbackTrace = 10;
 
 struct CallbackTraceEntry {
     std::string name;
@@ -56,7 +56,7 @@ struct CallbackTraceEntry {
     std::string callerStack;
 };
 
-std::array<CallbackTraceEntry, kMaxCallbackTrace> g_CallbackTraceBuffer;
+std::vector<CallbackTraceEntry> g_CallbackTraceBuffer;
 size_t g_CallbackTraceIndex = 0;
 std::mutex g_CallbackTraceMutex;
 
@@ -92,8 +92,12 @@ auto safeStr = [](const char *str) -> std::string {
 
 struct PluginConfig {
     bool LightweightMode;
+    bool LogCallbacksToConsole;
+    int CallbackLogSize;
     const char* FiltersPtr;
 };
+
+PluginConfig config{};
 
 DLL_EXPORT void RegisterCallbackTraceBinary(const void* data, size_t len) {
     if (!data || len < 6) return;
@@ -109,16 +113,39 @@ DLL_EXPORT void RegisterCallbackTraceBinary(const void* data, size_t len) {
     std::string profile(raw + 6 + nameLen, profileLen);
     std::string stack(raw + 6 + nameLen + profileLen, stackLen);
 
+    if (config.LogCallbacksToConsole) {
+        ACC_CORE_INFO("[Callback] Name: {}", name);
+        ACC_CORE_INFO("[Callback] Profile: {}", profile);
+        ACC_CORE_INFO("[Callback] Stack:\n{}", stack);
+    }
+
     std::lock_guard lock(g_CallbackTraceMutex);
-    g_CallbackTraceBuffer[g_CallbackTraceIndex % kMaxCallbackTrace] = {std::move(name), std::move(profile), std::move(stack)};
+
+    if (g_CallbackTraceBuffer.empty())
+        return;
+
+    size_t bufferSize = g_CallbackTraceBuffer.size();
+    g_CallbackTraceBuffer[g_CallbackTraceIndex % bufferSize] = {
+        std::move(name), std::move(profile), std::move(stack)
+    };
     g_CallbackTraceIndex++;
+}
+
+void SetMaxCallbackTrace(size_t newSize) {
+    std::lock_guard lock(g_CallbackTraceMutex);
+
+    if (newSize == 0)
+        return;
+
+    g_CallbackTraceBuffer.clear();
+    g_CallbackTraceBuffer.resize(newSize);
+    g_CallbackTraceIndex = 0;
 }
 
 DLL_EXPORT PluginConfig CssPluginRegistered()
 {
     static std::string filtersJoined;
 
-    PluginConfig config{};
     config.LightweightMode = true;
 
     try {
@@ -130,6 +157,13 @@ DLL_EXPORT PluginConfig CssPluginRegistered()
             if (j.contains("LightweightMode") && j["LightweightMode"].is_boolean())
                 config.LightweightMode = j["LightweightMode"].get<bool>();
 
+            if (j.contains("LogCallbacksToConsole") && j["LogCallbacksToConsole"].is_boolean())
+                config.LogCallbacksToConsole = j["LogCallbacksToConsole"].get<bool>();
+
+            if (j.contains("CallbackLogSize") && j["CallbackLogSize"].is_number_integer()) {
+                config.CallbackLogSize = j["CallbackLogSize"].get<int>();
+                SetMaxCallbackTrace(config.CallbackLogSize);
+            }
             if (j.contains("ProfileExcludeFilters") && j["ProfileExcludeFilters"].is_array()) {
                 std::ostringstream oss;
                 for (const auto& item : j["ProfileExcludeFilters"]) {
@@ -184,9 +218,14 @@ static bool dumpCallback(const google_breakpad::MinidumpDescriptor &descriptor, 
     dumpFile << "-------- CALLBACK TRACE BEGIN --------\n";
     {
         std::lock_guard lock(g_CallbackTraceMutex);
-        for (int i = 0; i < std::min(kMaxCallbackTrace, (int)g_CallbackTraceIndex); ++i) {
-            size_t idx = (g_CallbackTraceIndex - 1 - i) % kMaxCallbackTrace;
+
+        const size_t bufferSize = g_CallbackTraceBuffer.size();
+        const size_t validCount = std::min(bufferSize, g_CallbackTraceIndex);
+
+        for (size_t i = 0; i < validCount; ++i) {
+            size_t idx = (g_CallbackTraceIndex - 1 - i) % bufferSize;
             const auto& entry = g_CallbackTraceBuffer[idx];
+
             dumpFile << "Name: " << entry.name << "\n";
             dumpFile << "Profile: " << entry.profile << "\n";
             dumpFile << "Stack:\n" << entry.callerStack << "\n";
