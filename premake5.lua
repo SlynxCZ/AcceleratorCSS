@@ -1,4 +1,3 @@
-require "clion"
 include("premake/utils")
 
 SDK_PATH = os.getenv("HL2SDKCS2")
