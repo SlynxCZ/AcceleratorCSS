@@ -11,10 +11,6 @@ services:
       MMSOURCE112: /project/vendor/metamod-source
     command: >
       bash -c "
-        mkdir -p /usr/local/share/lua/5.3/clion
-        cp -r /project/premake/clion/* /usr/local/share/lua/5.3/clion/
-        mkdir -p /usr/local/share/lua/5.3/cmake
-        cp -r /project/premake/cmake/* /usr/local/share/lua/5.3/cmake/
         premake5 gmake2 &&
         cd build &&
         make -j$(nproc) &&
