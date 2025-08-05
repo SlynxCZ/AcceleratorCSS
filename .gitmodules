@@ -14,3 +14,6 @@
 [submodule "vendor/Protobufs"]
 	path = vendor/Protobufs
 	url = https://github.com/SteamDatabase/Protobufs
+[submodule "vendor/breakpad"]
+	path = vendor/breakpad
+	url = https://github.com/SlynxCZ/breakpad
