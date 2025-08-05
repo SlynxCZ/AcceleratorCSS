@@ -1,4 +1,4 @@
-﻿services:
+services:
   builder:
     build:
       context: ./docker
@@ -19,7 +19,6 @@
         cd build &&
         make -j$(nproc) &&
         cd ../ &&
-        premake5 clion &&
 
         dotnet publish ./managed/AcceleratorCSS_CSS/AcceleratorCSS_CSS.csproj -c Release -o bin/Debug/AcceleratorCSS_CSS &&
 
