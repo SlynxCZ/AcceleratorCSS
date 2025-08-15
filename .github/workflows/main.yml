@@ -3,7 +3,7 @@ name: Continuous Integration
 on:
   push:
     tags:
-      - '*'                 # tag push spouští release
+      - '*'
     branches:
       - master
     paths-ignore:
@@ -30,24 +30,13 @@ jobs:
       uses: docker/setup-buildx-action@v3
 
     - name: Build plugin inside container
-      run: docker compose up --build --abort-on-container-exit
-
-    - name: Prepare release structure
-      run: |
-        mkdir -p release/addons/AcceleratorCSS/bin/linuxsteamrt64
-        mkdir -p release/addons/metamod
-        mkdir -p release/addons/counterstrikesharp/plugins
-
-        cp bin/Debug/AcceleratorCSS.so release/addons/AcceleratorCSS/bin/linuxsteamrt64/AcceleratorCSS.so
-        cp bin/Debug/config.json release/addons/AcceleratorCSS/config.json
-        cp bin/Debug/AcceleratorCSS.vdf release/addons/metamod/AcceleratorCSS.vdf
-        cp -r bin/Debug/AcceleratorCSS_CSS release/addons/counterstrikesharp/plugins/AcceleratorCSS_CSS
+      run: docker compose -f docker/docker-compose.yml up --build --abort-on-container-exit
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: structured-package
-        path: release
+        path: build/package
 
   release:
     name: Release
@@ -60,12 +49,12 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: structured-package
-        path: ./release
+        path: ./build/package
 
     - name: Archive package
       run: |
         version="${GITHUB_REF#refs/tags/}"
-        tar -czf AcceleratorCSS-${version}.tar.gz -C release .
+        tar -czf AcceleratorCSS-${version}.tar.gz -C build/package .
 
     - name: Upload release archive
       uses: svenstaro/upload-release-action@v2
