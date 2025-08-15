@@ -6,7 +6,7 @@
 #include "CMiniDumpComment.hpp"
 #include "log.h"
 
-#include <json.hpp>
+#include <nlohmann/json.hpp>
 #include <entitysystem.h>
 #include <entity2/entitysystem.h>
 

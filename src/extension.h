@@ -11,7 +11,7 @@
 #include <igameevents.h>
 #include <sh_vector.h>
 #include <iserver.h>
-#include <json.hpp>
+#include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
 
