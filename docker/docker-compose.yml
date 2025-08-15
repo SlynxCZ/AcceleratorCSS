@@ -1,0 +1,8 @@
+services:
+  builder:
+    image: xmake-builder
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    volumes:
+      - ..:/app/source

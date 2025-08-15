@@ -4,6 +4,7 @@ cmake-build-*/
 .kdev4/
 generated/
 !**/protobuf/generated/
+.xmake/
 
 # configure_file auto generated.
 configs/addons/metamod/counterstrikesharp.vdf
