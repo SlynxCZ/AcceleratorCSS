@@ -50,6 +50,22 @@ namespace acceleratorcss {
 
     extern AcceleratorCSS_MM gPlugin;
 
+    namespace Paths {
+        static std::string gameDirectory;
+
+        inline std::string GameDirectory() {
+            if (gameDirectory.empty()) {
+                CBufferStringGrowable<255> gamePath;
+                g_pEngineServer->GetGameDir(gamePath);
+                gameDirectory = std::string(gamePath.Get());
+            }
+            return gameDirectory;
+        }
+
+        inline std::string GetRootDirectory() { return GameDirectory() + "/addons/AcceleratorCSS"; }
+        inline std::string Logs() { return GameDirectory() + "/addons/AcceleratorCSS/logs"; }
+    }
+
 #endif //_INCLUDE_METAMOD_SOURCE_STUB_PLUGIN_H_
 }
 

@@ -1,14 +1,14 @@
 ﻿-- AcceleratorCSS build script for xmake
 local ACCELERATORCSS_VERSION = os.getenv("ACCELERATORCSS_VERSION") or "1.0-dev"
 
-add_rules("mode.debug", "mode.release")
+add_rules("mode.debug")
 
 -- External packages via xmake-repo
 add_requires("fmt")
 add_requires("spdlog")
-add_requires("breakpad")
 add_requires("nlohmann_json")
 add_requires("funchook")
+add_requires("zlib")
 
 -- Paths
 local ROOT     = os.projectdir()
@@ -40,14 +40,32 @@ target("AcceleratorCSS")
       path.join(MM_PATH, "core/sourcehook/sourcehook_impl_cvfnptr.cpp"),
       path.join(MM_PATH, "core/sourcehook/sourcehook_impl_cproto.cpp"),
       path.join(ROOT, "src", "log.cpp"),
-      path.join(ROOT, "protobufs", "generated", "**.pb.cc")
+      path.join(ROOT, "protobufs", "generated", "**.pb.cc"),
+      "vendor/breakpad/src/common/dwarf_cfi_to_module.cc",
+      "vendor/breakpad/src/common/dwarf_cu_to_module.cc",
+      "vendor/breakpad/src/common/dwarf_line_to_module.cc",
+      "vendor/breakpad/src/common/dwarf_range_list_handler.cc",
+      "vendor/breakpad/src/common/language.cc",
+      "vendor/breakpad/src/common/module.cc",
+      "vendor/breakpad/src/common/path_helper.cc",
+      "vendor/breakpad/src/common/stabs_reader.cc",
+      "vendor/breakpad/src/common/stabs_to_module.cc",
+      "vendor/breakpad/src/common/dwarf/bytereader.cc",
+      "vendor/breakpad/src/common/dwarf/dwarf2diehandler.cc",
+      "vendor/breakpad/src/common/dwarf/dwarf2reader.cc",
+      "vendor/breakpad/src/common/dwarf/elf_reader.cc",
+      "vendor/breakpad/src/common/linux/crc32.cc",
+      "vendor/breakpad/src/common/linux/dump_symbols.cc",
+      "vendor/breakpad/src/common/linux/elf_symbols_to_module.cc"
   })
 
   add_headerfiles(
-          path.join(ROOT, "src", "**.h"),
-          path.join(ROOT, "src", "**.hpp"),
-          path.join(ROOT, "protobufs", "generated", "**.pb.h")
+      path.join(ROOT, "src", "**.h"),
+      path.join(ROOT, "src", "**.hpp"),
+      path.join(ROOT, "protobufs", "generated", "**.pb.h")
   )
+
+  add_packages("fmt", "spdlog", "nlohmann_json", "funchook", "zlib")
 
   -- Link libraries from SDK & vendor
   add_links({
@@ -55,7 +73,10 @@ target("AcceleratorCSS")
       path.join(SDK_PATH, "lib", "linux64", "libtier0.so"),
       path.join(SDK_PATH, "lib", "linux64", "tier1.a"),
       path.join(SDK_PATH, "lib", "linux64", "interfaces.a"),
-      path.join(SDK_PATH, "lib", "linux64", "mathlib.a")
+      path.join(SDK_PATH, "lib", "linux64", "mathlib.a"),
+      path.join(ROOT, "vendor", "breakpad-build", "libbreakpad.a"),
+      path.join(ROOT, "vendor", "breakpad-build", "libbreakpad-client.a"),
+      path.join(ROOT, "vendor", "breakpad-build", "liblibdisasm.a"),
   })
 
   add_cxxflags("-lstdc++", "-Wno-register")
@@ -96,6 +117,3 @@ target("AcceleratorCSS")
       path.join(MM_PATH, "core"),
       path.join(MM_PATH, "core", "sourcehook")
   })
-
-  -- Link xmake packages
-  add_packages("fmt", "spdlog", "breakpad", "nlohmann_json", "funchook")

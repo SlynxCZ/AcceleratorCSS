@@ -204,7 +204,7 @@ static bool dumpCallback(const google_breakpad::MinidumpDescriptor &descriptor, 
     dumpFile << "CommandLine=" << crashCommandLine << "\n";
     dumpFile << "-------- CONFIG END --------\n\n";
 
-    LoggingSystem_GetLogCapture(&g_MiniDumpComment, false);
+    LoggingSystem_GetLogCapture(&g_MiniDumpComment, true);
     const char *pszConsoleHistory = g_MiniDumpComment.GetStartPointer();
 
     if (pszConsoleHistory[0]) {
@@ -254,62 +254,76 @@ namespace acceleratorcss {
 
     bool AcceleratorCSS_MM::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool late) {
         PLUGIN_SAVEVARS();
+        Log::Init();
 
         GET_V_IFACE_CURRENT(GetServerFactory, g_pSource2Server, ISource2Server, SOURCE2SERVER_INTERFACE_VERSION);
-        GET_V_IFACE_CURRENT(GetEngineFactory, g_pNetworkServerService, INetworkServerService,
-                            NETWORKSERVERSERVICE_INTERFACE_VERSION);
+        GET_V_IFACE_CURRENT(GetEngineFactory, g_pNetworkServerService, INetworkServerService, NETWORKSERVERSERVICE_INTERFACE_VERSION);
         GET_V_IFACE_CURRENT(GetEngineFactory, g_pEngineServer, IVEngineServer, INTERFACEVERSION_VENGINESERVER);
 
         g_ISmm = ismm;
 
-        strncpy(crashGamePath, ismm->GetBaseDir(), sizeof(crashGamePath) - 1);
-        ismm->Format(dumpStoragePath, sizeof(dumpStoragePath), "%s/addons/AcceleratorCSS/logs", ismm->GetBaseDir());
+        std::snprintf(crashGamePath, sizeof(crashGamePath), "%s", Paths::GameDirectory().c_str());
+        std::snprintf(dumpStoragePath, sizeof(dumpStoragePath), "%s", Paths::Logs().c_str());
 
-        struct stat st = {0};
+        if (crashGamePath[sizeof(crashGamePath) - 1] != '\0') {
+            ACC_CORE_ERROR("[DEBUG] crashGamePath not null-terminated!");
+            return false;
+        }
+        if (dumpStoragePath[sizeof(dumpStoragePath) - 1] != '\0') {
+            ACC_CORE_ERROR("[DEBUG] dumpStoragePath not null-terminated!");
+            return false;
+        }
+
+        struct stat st{};
         if (stat(dumpStoragePath, &st) == -1) {
             if (mkdir(dumpStoragePath, 0777) == -1) {
-                ACC_CORE_ERROR("- [ Failed to parse config: {} ] -", error);
+                ACC_CORE_ERROR("Failed to create logs directory: {}", dumpStoragePath);
                 g_pluginRegistered = false;
                 return false;
             }
-        } else
+        } else {
             chmod(dumpStoragePath, 0777);
-
-        google_breakpad::MinidumpDescriptor descriptor(dumpStoragePath);
-        exceptionHandler = new google_breakpad::ExceptionHandler(descriptor, NULL, dumpCallback, NULL, true, -1);
-
-        struct sigaction oact;
-        sigaction(SIGSEGV, NULL, &oact);
-        SignalHandler = oact.sa_sigaction;
+        }
 
         SH_ADD_HOOK(IServerGameDLL, GameFrame, g_pSource2Server, SH_MEMBER(this, &AcceleratorCSS_MM::GameFrame), true);
         SH_ADD_HOOK(INetworkServerService, StartupServer, g_pNetworkServerService,
                     SH_MEMBER(this, &AcceleratorCSS_MM::StartupServer), true);
 
-        strncpy(crashCommandLine, CommandLine()->GetCmdLine(), sizeof(crashCommandLine) - 1);
+        std::snprintf(crashCommandLine, sizeof(crashCommandLine), "%s",
+                      CommandLine() ? CommandLine()->GetCmdLine() : "");
 
-        if (late)
-            StartupServer({}, nullptr, g_pNetworkServerService->GetIGameServer()->GetMapName());
+        if (late) {
+            if (auto gs = g_pNetworkServerService->GetIGameServer()) {
+                if (const char* map = gs->GetMapName()) {
+                    StartupServer({}, nullptr, map);
+                }
+            }
+        }
 
-        Log::Init();
         g_SMAPI->AddListener(this, this);
 
         try {
             std::ifstream configFile(AcceleratorCSS::paths::ConfigDirectory());
             if (configFile.is_open()) {
                 configFile >> g_Config;
-                ACC_CORE_INFO("- [ Config loaded: {} ] -", AcceleratorCSS::paths::ConfigDirectory());
+                ACC_CORE_INFO("Config loaded: {}", AcceleratorCSS::paths::ConfigDirectory());
             } else {
-                ACC_CORE_WARN("- [ Could not open config: {} ] -", AcceleratorCSS::paths::ConfigDirectory());
+                ACC_CORE_WARN("Could not open config: {}", AcceleratorCSS::paths::ConfigDirectory());
                 g_pluginRegistered = false;
             }
         } catch (const std::exception &e) {
-            ACC_CORE_ERROR("- [ Failed to parse config: {} ] -", e.what());
+            ACC_CORE_ERROR("Failed to parse config: {}", e.what());
             g_pluginRegistered = false;
         }
 
-        ACC_CORE_INFO("- [ MM plugin loaded. ] -");
+        google_breakpad::MinidumpDescriptor descriptor(dumpStoragePath);
+        exceptionHandler = new google_breakpad::ExceptionHandler(descriptor, nullptr, dumpCallback, nullptr, true, -1);
 
+        struct sigaction oact{};
+        sigaction(SIGSEGV, nullptr, &oact);
+        SignalHandler = oact.sa_sigaction;
+
+        ACC_CORE_INFO("MM plugin loaded.");
         return true;
     }
 
@@ -344,12 +358,11 @@ namespace acceleratorcss {
         bool weHaveBeenFuckedOver = false;
         struct sigaction oact;
 
-        const char *currentMap = g_pNetworkServerService->GetIGameServer()->GetMapName();
-
+        auto gs = g_pNetworkServerService->GetIGameServer();
+        const char* currentMap = gs ? gs->GetMapName() : nullptr;
         if (currentMap && *currentMap && lastMap != currentMap) {
-            strncpy(crashMap, currentMap, sizeof(crashMap) - 1);
+            std::snprintf(crashMap, sizeof(crashMap), "%s", currentMap);
             lastMap = currentMap;
-
             ACC_CORE_INFO("- [ Detected map change: {} ] -", currentMap);
         }
 
@@ -381,7 +394,8 @@ namespace acceleratorcss {
 
     void AcceleratorCSS_MM::StartupServer(const GameSessionConfiguration_t &config, ISource2WorldSession *,
                                           const char *pszMapName) {
-        strncpy(crashMap, pszMapName, sizeof(crashMap) - 1);
+        if (pszMapName && *pszMapName)
+            std::snprintf(crashMap, sizeof(crashMap), "%s", pszMapName);
     }
 
     const char *AcceleratorCSS_MM::GetAuthor() { return "Slynx"; }

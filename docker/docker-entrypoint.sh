@@ -11,7 +11,7 @@ export ACCELERATORCSS_VERSION="$VERSION"
 echo "Setting version to \"$ACCELERATORCSS_VERSION\""
 
 # Configure & build native plugin
-xmake f -y -p linux -a x86_64 --mode=release
+xmake f -y -p linux -a x86_64 --mode=debug
 xmake -y
 
 # Prepare folders
@@ -23,7 +23,7 @@ mkdir -p build/package/addons/counterstrikesharp/plugins
 # Copy configs
 cp configs/addons/metamod/AcceleratorCSS.vdf build/package/addons/metamod
 cp configs/addons/AcceleratorCSS/config.json build/package/addons/AcceleratorCSS
-cp build/linux/x86_64/release/libAcceleratorCSS.so \
+cp build/linux/x86_64/debug/libAcceleratorCSS.so \
    build/package/addons/AcceleratorCSS/bin/linuxsteamrt64/AcceleratorCSS.so
 
 # Build managed
