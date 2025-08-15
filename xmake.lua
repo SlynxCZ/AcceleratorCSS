@@ -1,4 +1,5 @@
 ﻿-- AcceleratorCSS build script for xmake
+local ACCELERATORCSS_VERSION = os.getenv("ACCELERATORCSS_VERSION") or "1.0-dev"
 
 add_rules("mode.debug", "mode.release")
 
