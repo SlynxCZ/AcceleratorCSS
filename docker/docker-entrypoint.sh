@@ -19,7 +19,7 @@ mkdir -p build/package/addons/metamod
 mkdir -p build/package/addons/AcceleratorCSS
 mkdir -p build/package/addons/AcceleratorCSS/bin/linuxsteamrt64
 mkdir -p build/package/addons/counterstrikesharp/plugins
-mkdir -p build/package/addons/counterstrikesharp/shared
+mkdir -p build/package/addons/counterstrikesharp/shared/0Harmony
 
 # Copy configs
 cp configs/addons/metamod/AcceleratorCSS.vdf build/package/addons/metamod
