@@ -2,9 +2,11 @@
 // Created by Michal Přikryl on 12.06.2025.
 // Copyright (c) 2025 slynxcz. All rights reserved.
 //
+
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Runtime.Loader;
 using System.Text;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
@@ -21,11 +23,11 @@ public class AcceleratorCSS_CSS : BasePlugin
     public static bool Lightweight;
     private static RegisterCallbackTraceBinary? NativeBinary;
     private static string[] FilterList = [];
+
     [StructLayout(LayoutKind.Sequential)]
     public struct PluginConfig
     {
-        [MarshalAs(UnmanagedType.U1)]
-        public bool LightweightMode;
+        [MarshalAs(UnmanagedType.U1)] public bool LightweightMode;
 
         public IntPtr FiltersPtr;
     }
@@ -43,7 +45,8 @@ public class AcceleratorCSS_CSS : BasePlugin
 
     private void OnMetamodAllPluginsLoaded()
     {
-        var path = Path.Combine(Server.GameDirectory, "csgo", "addons", "AcceleratorCSS", "bin", "linuxsteamrt64", "AcceleratorCSS.so");
+        var path = Path.Combine(Server.GameDirectory, "csgo", "addons", "AcceleratorCSS", "bin", "linuxsteamrt64",
+            "AcceleratorCSS.so");
 
         if (!File.Exists(path))
         {
@@ -71,8 +74,10 @@ public class AcceleratorCSS_CSS : BasePlugin
                 {
                     if (!string.IsNullOrEmpty(filters))
                     {
-                        FilterList = filters.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                        FilterList = filters.Split(',',
+                            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                     }
+
                     Prints.ServerLog($"[AcceleratorCSS_CSS] Filters received: {filters}", ConsoleColor.Yellow);
                 }
             }
@@ -91,50 +96,114 @@ public class AcceleratorCSS_CSS : BasePlugin
     private void PatchAllMethods()
     {
         _harmony = new Harmony("AcceleratorCSS_CSS");
-        var selfAsm = typeof(AcceleratorCSS_CSS).Assembly;
 
-        foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+        int totalAssemblies = 0;
+        int totalTypes = 0;
+        int totalMethods = 0;
+        int patchedMethods = 0;
+        int skippedMethods = 0;
+        int failedMethods = 0;
+
+        foreach (var alc in AssemblyLoadContext.All)
         {
-            if (asm == selfAsm || !ReferencesCounterStrikeSharpApi(asm))
-                continue;
+            Prints.ServerLog($"[AcceleratorCSS_CSS] Scanning ALC: {alc.Name}", ConsoleColor.Magenta);
 
-            foreach (var type in SafeGetTypes(asm))
+            foreach (var asm in alc.Assemblies)
             {
-                if (type == null! || type.Namespace?.StartsWith("System") == true)
+                if (asm == typeof(AcceleratorCSS_CSS).Assembly) continue;
+
+                // ignoruj systemové
+                if (asm.FullName.StartsWith("System", StringComparison.OrdinalIgnoreCase) ||
+                    asm.FullName.StartsWith("Microsoft", StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic |
-                                                       BindingFlags.Instance | BindingFlags.Static))
+                // koukni, jestli má reference na CounterStrikeSharp
+                if (!ReferencesCounterStrikeSharpApi(asm)) continue;
+
+                totalAssemblies++;
+                Prints.ServerLog($"   [ASM] {asm.FullName}", ConsoleColor.Cyan);
+
+                foreach (var type in SafeGetTypes(asm))
                 {
-                    if (method == null! || method.IsAbstract || method.IsConstructor || method.IsGenericMethod)
+                    if (type == null! || type.Namespace?.StartsWith("System") == true)
                         continue;
 
-                    if (method.Name.StartsWith("get_") || method.Name.StartsWith("set_"))
-                        continue;
+                    totalTypes++;
 
-                    // ReSharper disable once ConditionalAccessQualifierIsNonNullableAccordingToAPIContract
-                    if (method.Name.Contains("Invoke") || method.DeclaringType?.Name?.Contains("TraceFilter") == true)
-                        continue;
-
-                    var parameters = method.GetParameters();
-                    if (parameters.Length == 1 && (
-                            parameters[0].ParameterType == typeof(IntPtr) ||
-                            parameters[0].ParameterType.Name.Contains("*")))
-                        continue;
-
-                    try
+                    foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic |
+                                                           BindingFlags.Instance | BindingFlags.Static))
                     {
-                        var prefix = new HarmonyMethod(typeof(AcceleratorCSS_CSS).GetMethod(nameof(TracePrefix),
-                            BindingFlags.Static | BindingFlags.NonPublic));
-                        _harmony.Patch(method, prefix: prefix);
-                    }
-                    catch
-                    {
-                        /* Silently fail */
+                        if (method == null! || method.IsAbstract || method.IsConstructor || method.IsGenericMethod)
+                        {
+                            skippedMethods++;
+                            continue;
+                        }
+
+                        if (method.Name.StartsWith("get_") || method.Name.StartsWith("set_"))
+                        {
+                            skippedMethods++;
+                            continue;
+                        }
+
+                        if (method.Name.Contains("Invoke") ||
+                            method.DeclaringType?.Name?.Contains("TraceFilter") == true)
+                        {
+                            skippedMethods++;
+                            continue;
+                        }
+
+                        if (method == null! || method.IsAbstract || method.IsConstructor || method.IsGenericMethod)
+                        {
+                            skippedMethods++;
+                            continue;
+                        }
+
+                        if (method.IsSpecialName)
+                        {
+                            skippedMethods++;
+                            continue;
+                        }
+
+                        if (method.DeclaringType?.Namespace != null &&
+                            (method.DeclaringType.Namespace.StartsWith("System") ||
+                             method.DeclaringType.Namespace.StartsWith("Microsoft")))
+                        {
+                            skippedMethods++;
+                            continue;
+                        }
+
+                        if (method.DeclaringType?.FullName == "CounterStrikeSharp.API.Core.BasePlugin")
+                        {
+                            skippedMethods++;
+                            continue;
+                        }
+
+                        totalMethods++;
+                        try
+                        {
+                            var prefix = new HarmonyMethod(typeof(AcceleratorCSS_CSS).GetMethod(
+                                nameof(TracePrefix),
+                                BindingFlags.Static | BindingFlags.NonPublic));
+
+                            _harmony.Patch(method, prefix: prefix);
+                            patchedMethods++;
+                        }
+                        catch (Exception ex)
+                        {
+                            failedMethods++;
+                            Prints.ServerLog(
+                                $"    [Failed] {method.DeclaringType?.FullName}::{method.Name} → {ex.GetType().Name}: {ex.Message}",
+                                ConsoleColor.Red);
+                        }
                     }
                 }
             }
         }
+
+        Prints.ServerLog(
+            $"[AcceleratorCSS_CSS] Patch summary: Assemblies={totalAssemblies}, Types={totalTypes}, " +
+            $"Methods scanned={totalMethods + skippedMethods}, Patched={patchedMethods}, Skipped={skippedMethods}, Failed={failedMethods}",
+            ConsoleColor.Yellow);
 
         Prints.ServerLog("[AcceleratorCSS_CSS] All methods patched with Harmony.", ConsoleColor.DarkGreen);
     }
@@ -167,7 +236,11 @@ public class AcceleratorCSS_CSS : BasePlugin
 
     private static void SendBinary(string name, string profile, string stack)
     {
-        if (NativeBinary == null) return;
+        if (NativeBinary == null)
+        {
+            Prints.ServerLog("[AcceleratorCSS_CSS] SendBinary skipped (NativeBinary == null)", ConsoleColor.Red);
+            return;
+        }
 
         var nameBytes = Encoding.UTF8.GetBytes(name);
         var profileBytes = Encoding.UTF8.GetBytes(profile);
@@ -186,7 +259,14 @@ public class AcceleratorCSS_CSS : BasePlugin
 
     private static string SafeToString(object? obj)
     {
-        try { return obj?.ToString() ?? "null"; } catch { return "[error]"; }
+        try
+        {
+            return obj?.ToString() ?? "null";
+        }
+        catch
+        {
+            return "[error]";
+        }
     }
 
     private static string Trim(string str, int max)
@@ -196,7 +276,14 @@ public class AcceleratorCSS_CSS : BasePlugin
 
     private static Type[] SafeGetTypes(Assembly asm)
     {
-        try { return asm.GetTypes(); } catch { return []; }
+        try
+        {
+            return asm.GetTypes();
+        }
+        catch
+        {
+            return [];
+        }
     }
 
     private static bool ReferencesCounterStrikeSharpApi(Assembly asm)
