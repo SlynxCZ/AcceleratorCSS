@@ -97,7 +97,7 @@ It is automatically built and deployed together with the native plugin when usin
 * [spdlog](https://github.com/gabime/spdlog)
 * HL2SDK-CS2 headers
 * Metamod:Source (CS2 version)
-* [CounterStrikeSharp v1.0.319 required](https://github.com/roflmuffin/CounterStrikeSharp)
+* [CounterStrikeSharp v1.0.339 required](https://github.com/roflmuffin/CounterStrikeSharp)
 
 ### Docker + Premake:
 

@@ -204,7 +204,7 @@ static bool dumpCallback(const google_breakpad::MinidumpDescriptor &descriptor, 
     dumpFile << "CommandLine=" << crashCommandLine << "\n";
     dumpFile << "-------- CONFIG END --------\n\n";
 
-    LoggingSystem_GetLogCapture(&g_MiniDumpComment, true);
+    LoggingSystem_GetLogCapture(&g_MiniDumpComment, false);
     const char *pszConsoleHistory = g_MiniDumpComment.GetStartPointer();
 
     if (pszConsoleHistory[0]) {
