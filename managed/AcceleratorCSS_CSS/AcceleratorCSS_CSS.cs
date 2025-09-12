@@ -113,8 +113,8 @@ public class AcceleratorCSS_CSS : BasePlugin
                 if (asm == typeof(AcceleratorCSS_CSS).Assembly) continue;
 
                 // ignoruj systemové
-                if (asm.FullName.StartsWith("System", StringComparison.OrdinalIgnoreCase) ||
-                    asm.FullName.StartsWith("Microsoft", StringComparison.OrdinalIgnoreCase))
+                if (asm.FullName != null && (asm.FullName.StartsWith("System", StringComparison.OrdinalIgnoreCase) ||
+                                             asm.FullName.StartsWith("Microsoft", StringComparison.OrdinalIgnoreCase)))
                     continue;
 
                 // koukni, jestli má reference na CounterStrikeSharp
@@ -130,8 +130,7 @@ public class AcceleratorCSS_CSS : BasePlugin
 
                     totalTypes++;
 
-                    foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic |
-                                                           BindingFlags.Instance | BindingFlags.Static))
+                    foreach (var method in GetAllMethods(type))
                     {
                         if (method == null! || method.IsAbstract || method.IsConstructor || method.IsGenericMethod)
                         {
@@ -145,8 +144,7 @@ public class AcceleratorCSS_CSS : BasePlugin
                             continue;
                         }
 
-                        if (method.Name.Contains("Invoke") ||
-                            method.DeclaringType?.Name?.Contains("TraceFilter") == true)
+                        if (method.Name.Contains("Invoke"))
                         {
                             skippedMethods++;
                             continue;
@@ -217,7 +215,7 @@ public class AcceleratorCSS_CSS : BasePlugin
     {
         try
         {
-            var name = Trim($"{__originalMethod?.DeclaringType?.FullName}::{__originalMethod?.Name}", 512);
+            var name = Trim($"{__originalMethod.DeclaringType?.FullName}::{__originalMethod?.Name}", 512);
 
             if (ShouldFilter(name))
                 return true;
@@ -304,6 +302,23 @@ public class AcceleratorCSS_CSS : BasePlugin
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void RegisterCallbackTraceBinary(byte[] data, int len);
+
+    private static IEnumerable<MethodInfo> GetAllMethods(Type? type)
+    {
+        const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic |
+                                   BindingFlags.Instance | BindingFlags.Static |
+                                   BindingFlags.DeclaredOnly;
+
+        while (type != null)
+        {
+            foreach (var method in type.GetMethods(flags))
+            {
+                yield return method;
+            }
+
+            type = type.BaseType;
+        }
+    }
 }
 
 public static class Prints
