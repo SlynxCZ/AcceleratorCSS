@@ -99,7 +99,7 @@ It is automatically built and deployed together with the native plugin when usin
 * Metamod:Source (CS2 version)
 * [CounterStrikeSharp v1.0.340 required](https://github.com/roflmuffin/CounterStrikeSharp)
 
-### Docker + Premake:
+### Docker + XMake:
 
 ```bash
 git clone https://github.com/SlynxCZ/AcceleratorCSS.git
